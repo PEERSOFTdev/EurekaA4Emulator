@@ -988,6 +988,78 @@ bool CheckRefreshCycles(EurekaMachine& machine) {
   return ok;
 }
 
+// RAM answers at 50000h as well as 70000h (HANDOFF 6.48).  MEM.COM reads the
+// EPROM a byte at a time by DMA into bank 5 and takes the byte from its own
+// variable, which the CPU sees at 7xxxxh; with writes below kRamBase dropped
+// the editor showed nothing but NULs.  Its DMA helper also copies out of
+// bank 5, and a program may point CBR there, so all four paths are checked:
+// DMA into and out of the mirror, CPU read and CPU write through it.  The ROM
+// byte is first copied into bank 7, so the reference does not lean on the
+// mirror under test.  Every CPU access goes through CBR, whatever BBR is.
+bool CheckRamMirror(EurekaMachine& machine) {
+  constexpr uint32_t kRomByte = 0x1d3a0;  // first SYSJUMPS entry, C3h
+  constexpr uint32_t kReference = 0x78010;
+  constexpr uint32_t kDmaTarget = 0x58020;  // lands at 78020h
+  constexpr uint32_t kDmaCopy = 0x78030;    // copied back from 58020h
+  constexpr uint32_t kCpuTarget = 0x58040;  // lands at 78040h
+  constexpr uint32_t kMirrorOffset = 0x20000;
+  constexpr uint16_t kWindow = 0xd000;  // common area 1
+
+  const uint8_t cbr = machine.debug_in(hw::kCbr);
+  auto map = [&](uint32_t physical) {
+    machine.debug_out(hw::kCbr, static_cast<uint8_t>(((physical & ~0xfffu) - kWindow) >> 12));
+    return static_cast<uint16_t>(kWindow + (physical & 0xfff));
+  };
+  auto peek = [&](uint32_t physical) {
+    const uint8_t value = machine.debug_peek(map(physical));
+    machine.debug_out(hw::kCbr, cbr);
+    return value;
+  };
+  auto poke = [&](uint32_t physical, uint8_t value) {
+    machine.debug_poke(map(physical), value);
+    machine.debug_out(hw::kCbr, cbr);
+  };
+  auto dma = [&](uint32_t from, uint32_t to) {
+    machine.debug_out(hw::kSar0l, static_cast<uint8_t>(from));
+    machine.debug_out(hw::kSar0h, static_cast<uint8_t>(from >> 8));
+    machine.debug_out(hw::kSar0b, static_cast<uint8_t>(from >> 16));
+    machine.debug_out(hw::kDar0l, static_cast<uint8_t>(to));
+    machine.debug_out(hw::kDar0h, static_cast<uint8_t>(to >> 8));
+    machine.debug_out(hw::kDar0b, static_cast<uint8_t>(to >> 16));
+    machine.debug_out(hw::kBcr0l, 1);
+    machine.debug_out(hw::kBcr0h, 0);
+    machine.debug_out(hw::kDmode, 0x02);  // what MEM.COM writes
+    // DWE1 set leaves channel 1 alone; DWE0 clear lets DE0 through.
+    machine.debug_out(hw::kDstat, hw::kDstatDe0 | hw::kDstatDwe1);
+  };
+
+  for (uint32_t at : {kReference, kDmaTarget + kMirrorOffset, kDmaCopy,
+                      kCpuTarget + kMirrorOffset})
+    poke(at, 0);
+  dma(kRomByte, kReference);
+  const uint8_t rom = peek(kReference);
+  if (rom == 0) {
+    std::cout << "  zrkadlo: bajt ROM sa neskopiroval ani do banky 7\n";
+    return false;
+  }
+
+  bool ok = true;
+  auto expect = [&](bool good, const char* what) {
+    if (!good) {
+      std::cout << "  zrkadlo: " << what << "\n";
+      ok = false;
+    }
+  };
+  dma(kRomByte, kDmaTarget);
+  expect(peek(kDmaTarget + kMirrorOffset) == rom, "DMA do banky 5 nedoslo do RAM");
+  dma(kDmaTarget, kDmaCopy);
+  expect(peek(kDmaCopy) == rom, "DMA z banky 5 necita RAM");
+  expect(peek(kDmaTarget) == rom, "CPU cez banku 5 necita RAM");
+  poke(kCpuTarget, 0x5a);
+  expect(peek(kCpuTarget + kMirrorOffset) == 0x5a, "zapis CPU cez banku 5 nedosiel do RAM");
+  return ok;
+}
+
 // A Z180 samples its interrupt inputs at the **end** of an instruction
 // (UM005004 Table 47, note 7).  Step used to decide the request before the
 // instruction, so an instruction that switched a source off could still take
@@ -2442,8 +2514,9 @@ int wmain(int argc, wchar_t** argv) {
     const bool waits = CheckMemoryWaitStates(*machine);
     const bool refresh = CheckRefreshCycles(*machine);
     const bool sampling = CheckInterruptSampledAtEndOfInstruction(*machine);
+    const bool mirror = CheckRamMirror(*machine);
     const bool passed = settles && aliases && internal && highByte &&
-                        blockFlags && waits && refresh && sampling;
+                        blockFlags && waits && refresh && sampling && mirror;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=DC"
               << " ticho=" << (settles ? "ok" : "chyba")
               << " porty=" << (aliases ? "ok" : "chyba")
@@ -2452,7 +2525,8 @@ int wmain(int argc, wchar_t** argv) {
               << " priznaky=" << (blockFlags ? "ok" : "chyba")
               << " cakacie=" << (waits ? "ok" : "chyba")
               << " obnovovanie=" << (refresh ? "ok" : "chyba")
-              << " vzorkovanie=" << (sampling ? "ok" : "chyba") << "\n";
+              << " vzorkovanie=" << (sampling ? "ok" : "chyba")
+              << " zrkadlo=" << (mirror ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
   }
 
