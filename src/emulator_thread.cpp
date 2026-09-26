@@ -468,6 +468,13 @@ void EmulatorThread::PostSetVolume(int position) {
   Post(std::move(command));
 }
 
+void EmulatorThread::PostSetPhoneLine(bool connected) {
+  Command command;
+  command.type = Command::Type::kSetPhoneLine;
+  command.flag = connected;
+  Post(std::move(command));
+}
+
 void EmulatorThread::PostDumpDiagnostics() {
   PostType(Command::Type::kDumpDiagnostics);
 }
@@ -966,6 +973,9 @@ void EmulatorThread::Run() {
         break;
       case Command::Type::kSetVolume:
         machine.SetVolume(sliders::VolumeGain(command.position));
+        break;
+      case Command::Type::kSetPhoneLine:
+        machine.SetPhoneLine(command.flag);
         break;
       case Command::Type::kDumpDiagnostics:
         host::Print(std::wstring(L"\r\n[Režim písania: ") +

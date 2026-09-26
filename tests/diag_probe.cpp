@@ -13,6 +13,7 @@
 // A sequence TOKEN is either "kXX" (one key code in hex, e.g. kD7 for
 // Shift+F8), "sXX" (one PC scan code in hex, e.g. s3C for F2, taken through
 // the keyboard's own delivery path), "+wp"/"-wp" to set or clear the diskette's write protect notch,
+// "+linka"/"-linka" to plug the make-believe phone line in or out,
 // "nova" for an unformatted diskette, "vysun" for an empty drive,
 // "vypni"/"zapni"/"studeno" for the power switch and the two ways back on,
 // "cas:+7d" to move the clock the RTC answers with, "budik" to print it
@@ -514,6 +515,14 @@ int wmain(int argc, wchar_t** argv) {
         session.Protect(token[0] == L'+');
         std::printf("%s -> [zamok proti zapisu %s]\n", Label(token).c_str(),
                     token[0] == L'+' ? "zapnuty" : "vypnuty");
+        continue;
+      }
+      if (token == L"+linka" || token == L"-linka") {
+        // The make-believe phone line (HANDOFF 6.49): with it the dialler
+        // hears its dial tone and sends the digits through the DAC.
+        machine->SetPhoneLine(token[0] == L'+');
+        std::printf("%s -> [telefonna linka %s]\n", Label(token).c_str(),
+                    token[0] == L'+' ? "pripojena" : "odpojena");
         continue;
       }
       // Fingers landing on, and lifting off, one key of the membrane

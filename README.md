@@ -249,6 +249,20 @@ Disketa je nepovinná:
   ukončení nejaké súbory sú, emulátor sa spýta sám; ak odmietnete alebo
   výber zrušíte, obsah zanikne.
 
+## Telefónna linka
+
+Eureka vedela vytáčať telefónne čísla z telefónneho zoznamu. Pred
+vytáčaním však čaká na oznamovací tón, a keďže emulátor žiadnu linku nemá,
+po asi desiatich sekundách povie „není oznamovací tón“ a nevytočí nič.
+
+Položka **Stroj → Telefónna linka** pripojí vymyslenú linku, na ktorej
+oznamovací tón znie stále. Eureka potom vytáča a tóny voľby počuť
+z reproduktora. Kým je linka pripojená, stojí to aj v titulku okna.
+
+Nie je to skutočná linka a nikto sa neozve. Keďže tón znie stále,
+komunikačný program si na nej môže myslieť, že je spojenie. Emulátor si
+linku **nepamätá** — po každom spustení je odpojená.
+
 ## Výmena diskety za behu
 
 Disketa sa dá vymeniť bez toho, aby ste Eureku ukončili: ponuka
@@ -694,7 +708,9 @@ neprepísal obsah pripojeného obrazu.
 - základné stavové registre ASCI a CSI/O potrebné na štart ROM.
 
 Externý modem, telefónna linka a fyzický sériový kábel zatiaľ nemajú most na
-zariadenia Windows; ich vstupy zostávajú v bezpečnom pokojovom stave. Formátovanie
+zariadenia Windows; ich vstupy zostávajú v bezpečnom pokojovom stave. Jedinou
+výnimkou je vymyslená linka z ponuky Stroj (viď Telefónna linka), ktorá hlási
+oznamovací tón. Formátovanie
 hostiteľského priečinka prebehne a stroj ho ohlási ako dokončené, ale obsah
 stopy sa zahadzuje: disk je váš priečinok a formát v ňom súbory nemaže. Na
 neuloženej diskete sa formátovanie naopak prejaví celé — viď Nová disketa. Exotické viacsektorové

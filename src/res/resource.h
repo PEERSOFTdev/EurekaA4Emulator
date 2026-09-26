@@ -40,6 +40,8 @@
 #define ID_MACHINE_LOUDER    40015
 #define ID_MACHINE_QUIETER   40016
 #define ID_MACHINE_SLIDERS   40017
+// The make-believe phone line (EurekaMachine::SetPhoneLine), a check item.
+#define ID_MACHINE_PHONELINE 40018
 #define ID_KEYBOARD_BRAILLE  40020
 #define ID_KEYBOARD_PC       40021
 #define ID_KEYBOARD_TOGGLE   40022

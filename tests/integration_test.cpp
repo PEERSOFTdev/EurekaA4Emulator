@@ -988,6 +988,33 @@ bool CheckRefreshCycles(EurekaMachine& machine) {
   return ok;
 }
 
+// The make-believe phone line (HANDOFF 6.49).  Carrier detect is active low
+// on A8h bit 5, and the dialler at 19095 wants it low for a whole second
+// before it dials; unplugged it has to read high, or the terminal would see a
+// carrier on a line that is not there.  The other bits of the port must not
+// move with it.
+bool CheckPhoneLine(EurekaMachine& machine) {
+  const uint8_t unplugged = machine.debug_in(hw::kInputBuffer);
+  machine.SetPhoneLine(true);
+  const uint8_t plugged = machine.debug_in(hw::kInputBuffer);
+  machine.SetPhoneLine(false);
+  const uint8_t again = machine.debug_in(hw::kInputBuffer);
+  bool ok = true;
+  if ((unplugged & hw::kDcd0Mask) == 0 || (again & hw::kDcd0Mask) == 0) {
+    std::cout << "  linka: bez linky hlasi nosnu\n";
+    ok = false;
+  }
+  if ((plugged & hw::kDcd0Mask) != 0) {
+    std::cout << "  linka: s linkou nehlasi ton\n";
+    ok = false;
+  }
+  if ((plugged | hw::kDcd0Mask) != (unplugged | hw::kDcd0Mask)) {
+    std::cout << "  linka: pohli sa aj ine bity A8h\n";
+    ok = false;
+  }
+  return ok;
+}
+
 // A Z180 samples its interrupt inputs at the **end** of an instruction
 // (UM005004 Table 47, note 7).  Step used to decide the request before the
 // instruction, so an instruction that switched a source off could still take
@@ -2442,8 +2469,9 @@ int wmain(int argc, wchar_t** argv) {
     const bool waits = CheckMemoryWaitStates(*machine);
     const bool refresh = CheckRefreshCycles(*machine);
     const bool sampling = CheckInterruptSampledAtEndOfInstruction(*machine);
+    const bool line = CheckPhoneLine(*machine);
     const bool passed = settles && aliases && internal && highByte &&
-                        blockFlags && waits && refresh && sampling;
+                        blockFlags && waits && refresh && sampling && line;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=DC"
               << " ticho=" << (settles ? "ok" : "chyba")
               << " porty=" << (aliases ? "ok" : "chyba")
@@ -2452,7 +2480,8 @@ int wmain(int argc, wchar_t** argv) {
               << " priznaky=" << (blockFlags ? "ok" : "chyba")
               << " cakacie=" << (waits ? "ok" : "chyba")
               << " obnovovanie=" << (refresh ? "ok" : "chyba")
-              << " vzorkovanie=" << (sampling ? "ok" : "chyba") << "\n";
+              << " vzorkovanie=" << (sampling ? "ok" : "chyba")
+              << " linka=" << (line ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
   }
 

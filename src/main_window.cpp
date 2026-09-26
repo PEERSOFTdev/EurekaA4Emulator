@@ -281,6 +281,11 @@ void MainWindow::RegisterCommands() {
     if (dialog.ShowModal(hwnd_, IDD_SLIDERS) != IDOK) return;
     SetSliders(dialog.speech_rate(), dialog.volume());
   });
+  OnCommand(ID_MACHINE_PHONELINE, [this] {
+    phoneLine_ = !phoneLine_;
+    emulator_.PostSetPhoneLine(phoneLine_);
+    RefreshTitle();
+  });
   OnCommand(ID_KEYBOARD_BRAILLE,
             [this] { emulator_.PostSetMode(InputMode::kBraille); });
   OnCommand(ID_KEYBOARD_PC,
@@ -917,13 +922,16 @@ void MainWindow::RefreshTitle() const {
     SetTitle(L"Eureka A4 — vypnutá — disketa: " + diskette);
     return;
   }
+  // The phone line only when it is plugged in, for the same reason as the
+  // lock: it changes what the machine does, and the usual case costs no word.
+  const std::wstring line = phoneLine_ ? L" — telefónna linka" : L"";
   SetTitle(released_
                ? L"Eureka A4 — klávesnica uvoľnená — režim: " +
                      std::wstring(ModeName(emulator_.mode())) +
-                     L" — disketa: " + diskette
+                     L" — disketa: " + diskette + line
                : L"Eureka A4 — klávesnica: " +
                      std::wstring(ModeName(emulator_.mode())) +
-                     L" — disketa: " + diskette);
+                     L" — disketa: " + diskette + line);
 }
 
 void MainWindow::RefreshMenu() const {
@@ -982,6 +990,8 @@ void MainWindow::RefreshMenu() const {
   // WM_COMMAND, so Ctrl+P did nothing at all (ea4-6kz).
   EnableMenuItem(menu, ID_MACHINE_POWEROFF,
                  MF_BYCOMMAND | (poweredOff_ ? MF_GRAYED : MF_ENABLED));
+  CheckMenuItem(menu, ID_MACHINE_PHONELINE,
+                MF_BYCOMMAND | (phoneLine_ ? MF_CHECKED : MF_UNCHECKED));
   // Before RefreshShortcutText, which reads the item text back and would
   // otherwise be working on the names this is about to replace.
   RefreshSlotItems(menu);

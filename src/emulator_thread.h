@@ -189,6 +189,8 @@ class EmulatorThread {
   // is an input the firmware reads in the middle of a sentence.
   void PostSetSpeechRate(int position);
   void PostSetVolume(int position);
+  // Plugs the make-believe phone line in or out (EurekaMachine::SetPhoneLine).
+  void PostSetPhoneLine(bool connected);
   void PostDumpDiagnostics();
   // The four cursor keys at once (8Fh, k_udlr): how the machine is switched
   // off for real, from the Main Menu.
@@ -304,7 +306,7 @@ class EmulatorThread {
       kDumpDiagnostics, kPowerOff, kPowerOn, kFocusLost, kSaveDiskAs,
       kMountDisk, kEjectDisk, kCreateEmptyDisk, kInsertSlot, kAssignSlot,
       kSetWriteProtect, kSetSlotWriteProtect, kEnsureSlotDisk, kSetSpeechRate,
-      kSetVolume, kQuit,
+      kSetVolume, kSetPhoneLine, kQuit,
     } type = Type::kQuit;
     HostKeyEvent key{};
     InputMode mode = InputMode::kPc;

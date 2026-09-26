@@ -422,6 +422,9 @@ Tokeny sekvencie:
   kúsky a vo výpise bolo „Pseformatovat“ — stará tabuľka bola posunutá
   (`eureka.md`). Veľké a malé písmená sa rozlišujú ďalej.
 - `+wp`, `-wp` — zapne a vypne ochranu diskety proti zápisu.
+- `+linka`, `-linka` — pripojí a odpojí vymyslenú telefónnu linku, tú istú
+  ako **Stroj → Telefónna linka** v okne: kým je pripojená, `A8h` bit 5
+  hlási oznamovací tón a vytáčanie ide ďalej (HANDOFF 6.49).
 - `+b1`…`+b6`, `+bs` (medzerník), `+bh` (shift), `+f1`…`+f8`, `+ku`/`+kd`/`+kl`/`+kr`
   (kurzory) a ku každému `-…` — drží alebo pustí **jeden** kláves membránovej
   klávesnice, na rozdiel od `kXX` a `PressBraille`, ktoré posielajú hotový
