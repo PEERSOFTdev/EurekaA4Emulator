@@ -3669,6 +3669,132 @@ podľa titulku „Eureka A4 — diagnostika“ okno nenašiel, hoci ho
 `EnumWindows` s tým titulkom vypíše; spoľahlivé je hľadať triedu
 `ConsoleWindowClass` s číslom procesu emulátora.
 
+### 6.51 Rozšírená RAM na 40000h — druhá banka z opravovne
+
+Vznikla na vetve ako 6.50; pri prenesení na `main` 28. 9. 2026 bolo 6.50
+už obsadené záchranou pri zavretí konzoly, preto 6.51.
+
+Podnet 26. 9. 2026 od majiteľa: jeho stroj má po servise **druhý modul
+RAM**, ktorý obsadí fyzické `40000h`. Firmvér o ňom nevie (6.44) a nepoužije
+ho, ale programy z diskety si ho mapujú cez `CBR`/`BBR` a ukladajú do neho
+dáta. Takto upravených strojov je málo — robil ich jeden človek — a ich
+majitelia chcú svoje programy spúšťať aj v emulátore.
+
+**Rozhodnuté s majiteľom**, nie zmerané:
+
+- modul má **64 KB** na `40000h–4FFFFh` (dva čipy po 32 KB, rovnako ako
+  `RAM 2,3` v rozložení Advanced English Eureky v `MEMMAP.E`);
+- odpovedá aj na **`60000h–6FFFFh`**. Dôvod je ten istý ako pri 6.48: RAM
+  nedekóduje A17, takže `5xxxxh` je `7xxxxh`; druhý modul na tej istej
+  dekódovacej logike má byť `4xxxxh` = `6xxxxh`;
+- obsah **prežije vypnutie** ako hlavná RAM, teda patrí do snímky;
+- zapína sa **len v `nastavenia.txt`**, bez položky v ponuke alebo
+  v dialógu — nikomu inému sa tak nič navyše nečíta nahlas.
+
+**Krok 1, hotový: model pamäte.** `EurekaMachine::SetExtraRam` modul osadí
+alebo vyberie; vybratie ho zmaže, ako by ho zmazalo vytiahnutie. `Fold`
+už nie je statický: `6xxxxh` prekladá na `4xxxxh`, len keď je modul
+osadený, a `WritePhysical` pustí zápis do `4xxxxh` z tej istej podmienky.
+`memory_` drží modul raz, na `kExtraRamBase`. Bez modulu je stroj bajt po
+bajte ten istý ako predtým — zápisy do `4xxxxh` a `6xxxxh` sa zahodia,
+čítanie vráti nulu. Na tom rozdiele stojí `RAM4B.COM` (6.44), takže ho
+test drží tiež.
+
+Drží to `CheckExtraRam` v režime `dc` (výpis `banka4=`): bez modulu sa
+zápis stratí, s modulom sa zápis procesora prečíta na oboch adresách,
+DMA do `6xxxxh` dôjde do `4xxxxh` a späť sa dá prečítať, štandardná RAM
+na `7xxxxh` sa nepohne a vybratý modul nič nenechá. Pomocné funkcie
+(`PeekPhysical`, `PokePhysical`, `DmaByte`) sú vytiahnuté z
+`CheckRamMirror`, ktorý ich teraz používa tiež. Overené štyrmi mutáciami,
+každú zhodí `banka4=chyba`: zápis do modulu zakázaný (štyri kontroly),
+zápis povolený aj bez modulu (jedna), vybratie bez mazania (jedna)
+a `6xxxxh` bez prekladu (tri).
+
+**Krok 2, hotový: snímka v samostatnom súbore.** Majiteľova podmienka:
+nič staršie sa nesmie pokaziť, starší emulátor má zo snímky obnoviť aspoň
+obyčajnú RAM. Starší `LoadSnapshot` berie len súbor s presnou dĺžkou
+a magic `EA4RAM01` — dlhší súbor alebo nové číslice by nazval poškodeným
+a po „áno“ zmazal. Preto `pamat.bin` zostáva **bajt po bajte**, aký bol,
+a modul ide do `pamat-banka4.bin` (`Settings::ExtraRamSnapshotFile`,
+magic `EA4RAM4B` + 64 KB, bez MD5 ROM — dáta programu znamenajú pod
+každou ROM to isté). Komentár pri `kSnapshotMagic` hovorí, že ďalšie
+rozšírenie má ísť rovnako cestou, nie cez nové číslice.
+
+Pravidlá súboru modulu, a prečo práve takto:
+
+- **Vypnutý modul súbor ignoruje, nemaže.** `Settings::Save` neznáme kľúče
+  zahadzuje (je to napísané aj v hlavičke súboru), takže starší emulátor
+  pri prvom uložení nastavení `rozsirena-ram=1` vyhodí. Keby vypnutý modul
+  súbor mazal, obsah by sa po návrate k novej verzii stratil **potichu**.
+- **Bez podmienky sa maže len pri vypnutom zachovaní RAM** (pri štarte aj
+  v dialógu) — to je výslovná žiadosť používateľa, aby sa nič neuchovalo.
+- **S osadeným modulom ide súbor tam, kam `pamat.bin`:** spotrebuje sa po
+  úspešnom teplom štarte, zmaže sa pri „áno“ na poškodenú alebo cudziu
+  snímku a pri studenom štarte — ten maže celú RAM, modul tiež. Pri „áno“
+  bol najprv bez podmienky; dialóg o module nehovorí a práve stroj bez
+  modulu je ten, ktorý treba chrániť, preto je podmienka aj tam.
+- **Súbory nie sú zviazané** (napr. MD5 hlavnej snímky), hoci sa môžu
+  rozísť: starší emulátor spotrebuje `pamat.bin`, pri vypnutí napíše nový
+  a `pamat-banka4.bin` zostane z predošlej relácie. Ten starší emulátor ale
+  do banky 4 zapisovať nevie, takže v súbore je stále to, čo modul naposledy
+  držal. Väzba by riskovala stratu dát, jej absencia len obsah „starší“,
+  než je zvyšok RAM. **Rozhodnutie, nie meranie.**
+- Chýbajúci súbor pri osadenom module znamená prázdny modul bez slova;
+  poškodený sa ohlási raz cez `Warn` a modul začne prázdny.
+
+Drží to `CheckExtraRamSnapshot` v režime `snimka` (výpis `banka4=`, vedľa
+`ram=` pre pôvodný `CheckSnapshot`): `pamat.bin` s osadeným modulom má
+presne dĺžku hlavičky + 64 KB a začína `EA4RAM01` — to je kontrola, ktorá
+drží sľub starším verziám; obsah modulu prežije uloženie a načítanie a je
+vidieť aj na `6xxxxh`; bez súboru modulu sa snímka načíta a modul je
+prázdny; stroj bez modulu súbor nečíta; poškodený súbor vráti `kCorrupt`.
+Overené mutáciami: modul pripísaný na koniec `pamat.bin` zhodí pôvodnú aj
+novú kontrolu, chýbajúca podmienka osadenia pri čítaní jednu, zápis zlej
+banky dve. Pravidlá mazania žijú v `main.cpp` a test na ne nesiaha —
+overiť sa dajú len ručne v okne.
+
+Pomocníci `PeekPhysical`/`PokePhysical` si teraz sami nastavujú aj `CBAR`
+(trieda `CbrWindow`): stroj len po `PowerOn` má `CBAR` z resetu a `D000h`
+tam patrí pod `BBR`, nie pod `CBR`. V režime `dc` to nebolo vidieť, lebo
+tam firmvér `CBAR` už nastavil.
+
+**Krok 3, hotový: nastavenie a sonda.** Kľúč `rozsirena-ram` v
+`nastavenia.txt`, chýbajúci znamená vypnuté a modul osadí **len** `1`
+(opak `zachovat-ram`, kde vypína len `0`). Píše sa vždy, aj ako `0`, lebo
+súbor je jediné miesto, kde sa dá nájsť. Platí od štartu — `main.cpp`
+volá `SetExtraRam` pred načítaním snímky. `settings_test` drží chýbajúci
+kľúč, zápis a čítanie oboch hodnôt, `0` v súbore a to, že iné slovo než
+`1` modul neosadí; overené dvoma mutáciami. Sonda má tokeny `+banka4`
+a `-banka4`. Odsek je v README pod „Čo si emulátor pamätá“.
+
+**Overené programom.** Sondou z predvoleného stroja:
+`seq 60000000 kD6 RAM4B~ . . .` povie „Konec“ a dvakrát „Dobrý večer“
+(banka 5 cez zrkadlo 6.48); s `+banka4` pred `kD6` povie štyrikrát —
+presne to, čo o plne osadenom stroji hovorí človek, ktorý RAM4B poslal
+(6.44).
+
+Preložené krížovým mingw z Linuxu bez varovaní, 19 × `PASS`; `build.bat`
+a `run-tests.bat` na Windows sa nespúšťali.
+
+**Otvorené:** program niektorého z majiteľov upravených strojov, ktorý
+modul naozaj používa na dáta. RAM4B dokladá len to, že modul odpovedá;
+nie to, ako ho mapujú skutočné aplikácie (cez `CBR`, `BBR` alebo DMA —
+model ide pri všetkých troch cez ten istý `Fold`, test však siaha len na
+`CBR` a DMA).
+
+**Doplnené 28. 9. 2026: overené aplikáciami.** Človek, ktorý moduly do
+strojov osádzal a má k nim upravené aplikácie, zostavu z tejto vetvy
+vyskúšal a podľa majiteľa funkcia funguje, ako má. Ktorou cestou jeho
+aplikácie modul mapujú a či skúšal aj prežitie cez vypnutie, v správe
+nebolo — to zostáva nezaznamenané, nie overené naopak.
+
+**Doplnené v ten istý deň, pri prenesení na `main`:** záchrana pri
+zavretí diagnostickej konzoly (6.50) prišla na `main` medzitým a ukladala
+len `pamat.bin`. S osadeným modulom by ďalší štart obnovil stroj s
+prázdnym modulom a nič by nepovedal. `SetCloseRescue` v `main.cpp` preto
+zapisuje aj `pamat-banka4.bin`, rovnako ako riadne ukončenie. Test na to
+nesiaha, rovnako ako na pravidlá mazania.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.

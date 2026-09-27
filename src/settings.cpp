@@ -19,6 +19,7 @@ namespace {
 // otherwise stop matching.
 constexpr char kLastDiskKey[] = "posledna-disketa";
 constexpr char kKeepRamKey[] = "zachovat-ram";
+constexpr char kExtraRamKey[] = "rozsirena-ram";
 // Spelt out rather than 0/1, because this is the one key whose two values a
 // person editing the file by hand would have to guess at otherwise.
 constexpr char kKeyboardKey[] = "klavesnica";
@@ -134,6 +135,11 @@ fs::path Settings::SnapshotFile() {
   return dir.empty() ? fs::path{} : dir / L"pamat.bin";
 }
 
+fs::path Settings::ExtraRamSnapshotFile() {
+  const fs::path dir = ConfigDirectory();
+  return dir.empty() ? fs::path{} : dir / L"pamat-banka4.bin";
+}
+
 void Settings::Load() {
   std::ifstream input(file_, std::ios::binary);
   if (!input) return;
@@ -163,6 +169,12 @@ void Settings::Load() {
       // Absent means the default (on); only an explicit "0" turns it off, so a
       // file written by a version that never knew this key keeps the RAM.
       keepRam_ = value != L"0";
+      continue;
+    }
+    if (key == kExtraRamKey) {
+      // The other way round: only an explicit "1" fits the module.  A machine
+      // that grows RAM from a typo would change what RAM4B-style programs see.
+      extraRam_ = value == L"1";
       continue;
     }
     if (key == kKeyboardKey) {
@@ -226,6 +238,9 @@ bool Settings::Save(std::wstring& error) const {
   // Always written, even at its default, so the switch is visible to someone
   // editing the file by hand.
   text += std::wstring(L"zachovat-ram=") + (keepRam_ ? L"1" : L"0") + L"\r\n";
+  // Written at its default too: this switch is nowhere else, so the file is
+  // the only place anyone can find it.
+  text += std::wstring(L"rozsirena-ram=") + (extraRam_ ? L"1" : L"0") + L"\r\n";
   text += std::wstring(L"klavesnica=") +
           (brailleKeyboard_ ? kKeyboardBraille : kKeyboardPc) + L"\r\n";
   text += L"rychlost-reci=" + std::to_wstring(speechRate_) + L"\r\n";

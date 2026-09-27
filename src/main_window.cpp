@@ -519,6 +519,7 @@ void MainWindow::RegisterCommands() {
       if (!dialog.keep_ram()) {
         std::error_code ec;
         std::filesystem::remove(Settings::SnapshotFile(), ec);
+        std::filesystem::remove(Settings::ExtraRamSnapshotFile(), ec);
       }
     }
   });

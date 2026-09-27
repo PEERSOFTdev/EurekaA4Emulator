@@ -48,6 +48,9 @@ class Settings {
   // FindFile.  Empty when there is nowhere to put it; the caller then just
   // cold-starts and, at exit, says the state could not be kept.
   static std::filesystem::path SnapshotFile();
+  // The extra RAM module's contents, next to SnapshotFile and by the same rule
+  // (HANDOFF 6.51).
+  static std::filesystem::path ExtraRamSnapshotFile();
 
   // A line that makes no sense is skipped rather than fatal: this file is
   // meant to be editable by hand, and one bad line must not cost the user
@@ -69,6 +72,13 @@ class Settings {
   // snapshot already on disk -- see SnapshotFile and HANDOFF 6.15.
   bool keep_ram() const { return keepRam_; }
   void SetKeepRam(bool keep) { keepRam_ = keep; }
+
+  // Whether the machine has the extra 64K a service fitted at 40000h
+  // (EurekaMachine::SetExtraRam, HANDOFF 6.51).  Default off, and set only
+  // here in the file: few machines ever had it, and a switch in a dialog
+  // would be read aloud to everyone else.  Taken at start-up.
+  bool extra_ram() const { return extraRam_; }
+  void SetExtraRam(bool fitted) { extraRam_ = fitted; }
 
   // Which of the two keyboards the next run starts on.  It is how a person
   // types on this machine and it changes rarely, so it outlives the run
@@ -126,6 +136,7 @@ class Settings {
   std::filesystem::path file_;
   std::wstring lastDisk_;
   bool keepRam_ = true;
+  bool extraRam_ = false;
   bool brailleKeyboard_ = false;
   int speechRate_ = sliders::kRateDefault;
   int volume_ = sliders::kVolumeDefault;

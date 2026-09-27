@@ -370,6 +370,9 @@ Drží aj **prepínač zachovania RAM** (`zachovat-ram=`, `ea4-dh1`): že chýba
 kľúč znamená zapnuté (starší súbor nesmie ticho prestať uchovávať RAM), že
 vypnuté aj zapnuté prežijú zápis a čítanie a že sa píšu ako `0`/`1`.
 Overené mutáciou: `CP_UTF8` → `CP_ACP` v `settings.cpp` zhodí tri kontroly.
+Drží aj **rozšírenú RAM** (`rozsirena-ram=`, HANDOFF 6.51) — naopak: chýbajúci
+kľúč aj iné slovo než `1` znamenajú vypnuté, a `0` sa píše tiež, lebo súbor je
+jediné miesto, kde ten prepínač je.
 Drží aj **posuvníky** (`rychlost-reci=`, `hlasitost=`, `ea4-06x`): že chýbajúci
 kľúč znamená stred, že poloha prežije zápis aj čítanie, že slovo v súbore
 nechá predvolenú polohu (čítané ako nula by hlasitosť ticho stlmilo) a číslo
@@ -523,6 +526,9 @@ Tokeny sekvencie:
   ďalšieho slova. Dĺžku vety `zvuk` nezmeria — počíta vzorky za pevné okno;
   vplyv posuvníka ukážu zápisy do `RLDR0L` (port `0Eh` z `0264h`) vo výpise
   sondy (HANDOFF 6.34).
+- `+banka4`, `-banka4` — osadí a vyberie druhý modul RAM na 40000h (HANDOFF
+  6.51). Okno ho berie z nastavení len pri štarte, sonda ho vie meniť za behu;
+  `+banka4 kD6 RAM4B~ . . .` povie „Dobrý večer“ štyrikrát, bez neho dvakrát.
 - `cas:+7d`, `budik` — hodiny a budík. `cas:` posunie čas, ktorý hlási RTC
   (`+2h`, `-30m`, holé číslo sú sekundy), `budik` vypíše hodiny vedľa
   alarmových registrov, masky a stavu. Bez nich sa zmeškaný budík odmerať

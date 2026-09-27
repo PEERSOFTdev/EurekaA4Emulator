@@ -39,15 +39,23 @@ class EurekaMachine {
   // real Czech machine (HANDOFF 6.48).  memory_ keeps the one copy at kRamBase.
   static constexpr uint32_t kRamMirrorBase = 0x50000;
   static constexpr uint32_t kRamWindowMask = 0x70000;
-  static constexpr uint32_t Fold(uint32_t physical) {
-    return (physical & kRamWindowMask) == kRamMirrorBase
-               ? physical + (kRamBase - kRamMirrorBase)
-               : physical;
-  }
+  // An optional second 64K at 40000h.  No Eureka left the factory with it; a
+  // service fitted it into some machines, and programs from disk that know
+  // about it map it in through CBR or BBR -- the firmware never does (HANDOFF
+  // 6.44).  A17 is not decoded for it either, so it answers at 60000h the way
+  // the standard RAM answers at 50000h, and memory_ keeps the one copy at
+  // kExtraRamBase.  Off unless the host asks for it (SetExtraRam).
+  static constexpr uint32_t kExtraRamBase = 0x40000;
+  static constexpr uint32_t kExtraRamMirrorBase = 0x60000;
+  static constexpr std::size_t kExtraRamBytes = 0x10000;
   // How much of memory_ a snapshot carries: everything from kRamBase up.
   static constexpr std::size_t kRamSnapshotBytes = kPhysicalSize - kRamBase;
 
   bool LoadRom(const std::filesystem::path& path, std::wstring& error);
+  // Fits or removes the extra 64K at 40000h (kExtraRamBase).  Removing it
+  // clears it, as pulling the module would; fitting it finds it empty.
+  void SetExtraRam(bool fitted);
+  bool extra_ram() const { return extraRam_; }
   // tooBig is passed straight through to VirtualDisk::Mount: see there for
   // why the one refusal the host can act on is a value and not a string.
   bool MountDisk(const std::filesystem::path& folder, std::wstring& error,
@@ -150,6 +158,20 @@ class EurekaMachine {
   // memory_ and PowerOn would otherwise leave last boot's alarm in them.
   SnapshotResult LoadSnapshot(const std::filesystem::path& path,
                               std::wstring& error);
+
+  // The extra module (SetExtraRam) keeps its contents across power-off as the
+  // standard RAM does, but in a file of its own: the main snapshot has to stay
+  // byte for byte what versions without the module accept, or they would call
+  // it corrupt and offer to delete it (HANDOFF 6.51).  Nothing ties the two
+  // files together on purpose -- a version without the module cannot write
+  // bank 4, so the file still holds what the module last held.
+  bool SaveExtraRamSnapshot(const std::filesystem::path& path,
+                            std::wstring& error) const;
+  // kOk fills the module; kMissing and kCorrupt leave it as it was, which at
+  // start-up is empty.  Only with the module fitted -- without it the file is
+  // not read and kMissing comes back.
+  SnapshotResult LoadExtraRamSnapshot(const std::filesystem::path& path,
+                                      std::wstring& error);
 
   // False only once the machine has switched itself off.  The CPU is never
   // parked otherwise: the ROM waits for a key by spinning in its own event
@@ -368,6 +390,19 @@ class EurekaMachine {
   static void ChargeIoWaits(z80* cpu, uint16_t port);
 
   uint32_t PhysicalAddress(uint16_t logical) const;
+  // Maps a mirror address onto the copy memory_ keeps: 5xxxxh onto 7xxxxh
+  // always, 6xxxxh onto 4xxxxh when the extra RAM is fitted.
+  uint32_t Fold(uint32_t physical) const {
+    switch (physical & kRamWindowMask) {
+      case kRamMirrorBase:
+        return physical + (kRamBase - kRamMirrorBase);
+      case kExtraRamMirrorBase:
+        return extraRam_ ? physical - (kExtraRamMirrorBase - kExtraRamBase)
+                         : physical;
+      default:
+        return physical;
+    }
+  }
   // Every memory access, CPU or DMA, goes through these two, so the RAM mirror
   // has only one place to be forgotten in.
   uint8_t ReadPhysical(uint32_t physical) const { return memory_[Fold(physical)]; }
@@ -446,6 +481,7 @@ class EurekaMachine {
   uint8_t dac_ = 0x80;
   uint64_t dacWrites_ = 0;
   bool romLoaded_ = false;
+  bool extraRam_ = false;
 
   uint64_t cycles_ = 0;
   uint64_t instructions_ = 0;

@@ -320,25 +320,51 @@ int Run() {
   // close (which on the hardware is the battery cut-off switch) comes up cold
   // with "inicializace eureky", and a fresh snapshot is written only by the
   // next real power-down.
+  //
+  // The extra RAM module (HANDOFF 6.51) is fitted first, so the load knows to
+  // read its file.  With the module fitted that file follows pamat.bin
+  // wherever pamat.bin is consumed or dropped.  With it off the file is left
+  // alone, whatever happens to pamat.bin: a version that does not know the
+  // key drops it from nastavenia.txt on its next save, and that must not cost
+  // the contents.  The one exception is keep_ram switched off, which is the
+  // user asking for nothing to be kept.
+  machine->SetExtraRam(settings.extra_ram());
   bool warmResumed = false;
   const fs::path snapshotFile = Settings::SnapshotFile();
+  const fs::path extraRamFile = Settings::ExtraRamSnapshotFile();
+  const auto dropExtraRam = [&extraRamFile] {
+    std::error_code ec;
+    if (!extraRamFile.empty()) fs::remove(extraRamFile, ec);
+  };
   if (!settings.keep_ram()) {
     // The switch is off (ea4-dh1).  Make sure nothing lingers to be loaded
     // later -- the file may be left over from before it was turned off, or
     // from a hand edit of nastavenia.txt.
     std::error_code ec;
     if (!snapshotFile.empty()) fs::remove(snapshotFile, ec);
+    dropExtraRam();
   } else if (!snapshotFile.empty()) {
     std::wstring snapError;
     std::error_code ec;
     switch (machine->LoadSnapshot(snapshotFile, snapError)) {
       case EurekaMachine::SnapshotResult::kOk:
         fs::remove(snapshotFile, ec);
+        if (machine->extra_ram() && !extraRamFile.empty()) {
+          // Missing is a module fitted since the last power-down: it starts
+          // empty, and nothing is said.  Corrupt is said, once.
+          if (machine->LoadExtraRamSnapshot(extraRamFile, snapError) ==
+              EurekaMachine::SnapshotResult::kCorrupt)
+            Warn(snapError);
+          dropExtraRam();
+        }
         machine->PowerOn();
         warmResumed = true;
         break;
       case EurekaMachine::SnapshotResult::kMissing:
-        break;  // first run, or nothing to resume -- cold start, nothing said
+        // First run, or nothing to resume -- cold start, nothing said.  A cold
+        // start clears the module too, so its file goes with it.
+        if (machine->extra_ram()) dropExtraRam();
+        break;
       case EurekaMachine::SnapshotResult::kCorrupt:
       case EurekaMachine::SnapshotResult::kRomMismatch: {
         // The user's call, so a dialog and not host::Print -- the console may
@@ -353,6 +379,7 @@ int Run() {
           return 0;
         }
         fs::remove(snapshotFile, ec);
+        if (machine->extra_ram()) dropExtraRam();
         break;
       }
     }
@@ -411,7 +438,12 @@ int Run() {
     dying->FlushDisk(ignored);
     if (!settings.keep_ram()) return;
     const fs::path snapFile = Settings::SnapshotFile();
-    if (!snapFile.empty()) dying->SaveSnapshot(snapFile, ignored);
+    if (snapFile.empty() || !dying->SaveSnapshot(snapFile, ignored)) return;
+    // The extra RAM module's file too, as on the exit path below: without it
+    // the next start would resume with the module empty and say nothing
+    // (HANDOFF 6.51).
+    if (dying->extra_ram())
+      dying->SaveExtraRamSnapshot(Settings::ExtraRamSnapshotFile(), ignored);
   });
 
   win::RunMessageLoop(window.handle(), window.accelerators(),
@@ -448,6 +480,12 @@ int Run() {
            L"aplikačných dát. Ďalší štart začne inicializáciou.");
     else if (!machine->SaveSnapshot(snapFile, snapError))
       Warn(snapError);
+    // Second and separate, so pamat.bin stays what older versions read.
+    // Without the module the file is not touched: see the load above.
+    else if (machine->extra_ram()) {
+      const fs::path extraFile = Settings::ExtraRamSnapshotFile();
+      if (!machine->SaveExtraRamSnapshot(extraFile, snapError)) Warn(snapError);
+    }
   }
 
   // Asked about what is actually in the drive now, not about how the run

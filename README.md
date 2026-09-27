@@ -599,6 +599,31 @@ vždy vaše rozhodnutie a nezapne sa omylom. Súbor emulátor prepisuje celý,
 takže vlastné poznámky v ňom neprežijú. Na tom istom mieste je aj uložený
 stav pamäte — vzniká pri vypnutí a ďalšie spustenie ho prečíta a zmaže.
 
+### Rozšírená RAM
+
+Niektoré Eureky dostali v servise druhý modul RAM so 64 KB na fyzických
+adresách 40000h–4FFFFh; odpovedá aj na 60000h–6FFFFh. Firmvér ho nepoužíva,
+ale programy z diskety, ktoré o ňom vedia, si ho mapujú a ukladajú doň dáta.
+Emulátor ho vie osadiť, ale len cez súbor — v ponuke ani v dialógoch nie je.
+Zatvorte emulátor, v `nastavenia.txt` prepíšte riadok
+
+```text
+rozsirena-ram=0
+```
+
+na `rozsirena-ram=1` a emulátor znovu spustite. Riadok tam emulátor píše
+sám; keď v súbore chýba, modul osadený nie je.
+
+Obsah modulu prežije vypnutie tak ako ostatná pamäť, ale v samostatnom
+súbore `pamat-banka4.bin` vedľa `pamat.bin`. Súbor `pamat.bin` sa tým
+nemení, takže starší emulátor bez modulu ho prečíta ďalej a obnoví obyčajnú
+pamäť. Pozor len na to, že starší emulátor pri uložení nastavení riadok
+`rozsirena-ram` zo súboru vyhodí; po návrate k novšej verzii ho treba
+dopísať znovu. Obsah modulu sa tým nestratí: kým je modul vypnutý, emulátor
+súbor `pamat-banka4.bin` nečíta ani nemaže. Zmaže ho, keď vypnete zachovanie
+pamäte, a s osadeným modulom aj vtedy, keď stroj štartuje nanovo s
+inicializáciou — vtedy sa maže celá pamäť, modul rovnako.
+
 ## Spúšťanie súborov
 
 ### COM
@@ -700,7 +725,8 @@ neprepísal obsah pripojeného obrazu.
 - inštrukčné jadro Z80/HD64180 a rozšírené opkódy Z180;
 - 19-bitový adresný priestor, ROM/RAM a MMU registre CBR/BBR/CBAR; RAM
   odpovedá na 70000h aj na 50000h, kde ju má manuál, takže ju nájdu aj
-  programy z diskety, ktoré sa riadia ním;
+  programy z diskety, ktoré sa riadia ním; voliteľne aj druhý modul RAM
+  na 40000h, aký dostali niektoré stroje v servise (viď Rozšírená RAM);
 - PRT0/PRT1, interné vektorované prerušenia a oba kanály DMA;
 - braillová maticová klávesnica a rozhranie klávesnice PC/XT;
 - WD1772 na úrovni sektorov a CP/M BIOS na úrovni 128-bajtových záznamov;

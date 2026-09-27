@@ -115,6 +115,50 @@ void KeepRamSwitchRoundTrips() {
         "zapnutie je v subore ako zachovat-ram=1");
 }
 
+void ExtraRamSwitchRoundTrips() {
+  // The other way round from zachovat-ram: absent means off, because nearly
+  // no machine has the module, and only "1" turns it on (HANDOFF 6.51).
+  {
+    Settings settings(FileNamed("neexistuje.txt"));
+    settings.Load();
+    Check(!settings.extra_ram(), "chybajuci subor: rozsirena RAM je vypnuta");
+  }
+  const fs::path file = FileNamed("rozsirena-ram.txt");
+  std::wstring error;
+  {
+    Settings settings(file);
+    settings.SetExtraRam(true);
+    Check(settings.Save(error), "ulozenie s rozsirenou RAM prejde", Narrow(error));
+  }
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(loaded.extra_ram(), "rozsirena RAM prezije zapis aj citanie");
+  }
+  Check(ReadRaw(file).find("rozsirena-ram=1") != std::string::npos,
+        "zapnutie je v subore ako rozsirena-ram=1");
+  {
+    Settings settings(file);
+    settings.Load();
+    settings.SetExtraRam(false);
+    settings.Save(error);
+  }
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(!loaded.extra_ram(), "rozsirena RAM sa da vypnut");
+  }
+  // Written at the default too: the file is the only place the switch is.
+  Check(ReadRaw(file).find("rozsirena-ram=0") != std::string::npos,
+        "vypnutie je v subore ako rozsirena-ram=0");
+  WriteRaw(file, "rozsirena-ram=ano\r\n");
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(!loaded.extra_ram(), "ine slovo nez 1 modul neosadi");
+  }
+}
+
 void KeyboardModeRoundTrips() {
   // Absent means the PC keyboard, which is where this program has always
   // started: a file from a version that never knew the key must not move the
@@ -536,6 +580,7 @@ int main() {
 
   MissingFileIsDefaults();
   KeepRamSwitchRoundTrips();
+  ExtraRamSwitchRoundTrips();
   KeyboardModeRoundTrips();
   SlidersRoundTrip();
   SliderPositionsMapToTheHardware();
