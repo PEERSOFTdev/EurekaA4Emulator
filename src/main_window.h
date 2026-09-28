@@ -129,6 +129,11 @@ class MainWindow : public win::Window {
   // so that the title and the menu can be built on the window thread without
   // asking across.
   bool poweredOff_ = false;
+  // The make-believe phone line.  The window owns it and the worker only hears
+  // about it, like the sliders.  Not written to the settings file: a line left
+  // plugged in from last week would make the phone book dial and the terminal
+  // see a carrier with nobody remembering why.
+  bool phoneLine_ = false;
   // Set when the window is being torn down for a reason of its own -- a disk
   // error -- so WM_CLOSE does not stop to ask about the RAM on the way out.
   bool forceClose_ = false;

@@ -499,7 +499,8 @@ uint8_t EurekaMachine::ReadInputBuffer() const {
   // Nothing else lives on bit 1: the FDC's INTRQ is not readable here, and
   // reporting it on this bit made every disk command fail as "slaba baterie".
   // Those three are active low, so leaving them set is the idle state.
-  uint8_t value = hw::kCts1Mask | hw::kRingMask | hw::kDcd0Mask;
+  uint8_t value = hw::kCts1Mask | hw::kRingMask;
+  if (!phoneLine_) value |= hw::kDcd0Mask;
   if (dac_ >= vm1Threshold) value |= hw::kVm1Mask;
   if (dac_ >= vm2Threshold) value |= hw::kVm2Mask;
   return value;

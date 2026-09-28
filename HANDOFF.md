@@ -794,6 +794,11 @@ ho ale pollne aj v ceste tlačového výstupu (18F99, 18FB1, 19097). Buď je
 česká verzia zapojená inak, alebo je odvodenie „pripravenosť tlačiarne"
 nepresné. Bez sériovej relácie sa to nerozhodne.
 
+**Doplnené 26. 9. 2026:** `19097` nie je tlačový výstup, je to čakanie na
+oznamovací tón pred vytáčaním (6.49) — sedí to s `dcd0_mask`. Pre `18F99`
+a `18FB1` to overené nie je. Bit teraz vie ísť do nuly na požiadanie
+(Stroj → Telefónna linka); bez nej zostáva v jednotke ako doteraz.
+
 ### 6.4 Bity latchov, ktoré sa nikdy nezmenili
 
 Počas prechodu aplikáciami zostali nedotknuté `B0` bit 0 (`fdc_side`)
@@ -3454,6 +3459,67 @@ prepínač `EPROM512` a podľa neho `rom4_page equ 40h` (27C256) alebo `08h`
 vie. Náš dump je zostava pre 27C512 — celých 256 KB na `00000h–3FFFFh`,
 ako to pre 27C512 opisuje `MEMMAP.E` — a image pre 27C256 nemáme. Keby sme
 ju mali, bol by to iný stroj, nie iné mapovanie tohto.
+
+### 6.49 Vymyslená telefónna linka — `A8h` bit 5 na požiadanie
+
+Podnet 26. 9. 2026, dva:
+
+- **Telefónny zoznam** v emulátore vytáča, ale po asi desiatich sekundách
+  povie „není oznamovací tón“ a nič nezaznie.
+- **`MEM.COM`, Shift+F3 na stránke EPROM 0, posun 0** podľa majiteľa na
+  skutočnom stroji (nikdy nepripojenom k linke) vydal sériu tónov ako
+  z telefónu. V emulátore sa po ňom len čaká a editor pokračuje.
+
+**Čo firmvér robí.** Vytáčanie čaká na oznamovací tón: `19095h` číta
+`A8h` bit 5 (`dcd0_mask`, detekcia nosnej z AM7910, aktívne v nule) a chce
+ho v nule celú sekundu (20 × 50 ms). Volajúca slučka na `19014h` to skúša
+asi 160-krát s 50 ms pauzami; bez tónu zavesí (`1902Ah`). S tónom ide na
+`19031h`: vynuluje `dtmf_mask` (DAC na linku), `DFDEh` s `C1h`, relé podľa
+`C43Dh`, a vytáča reťazec na `(DE)` — `P`/`T` prepína pulznú a tónovú voľbu,
+`+` je pauza, koniec je nula, čiarka alebo znak s bitom 7. Tónová voľba
+(`19118h`) hľadá znak v tabuľke `D#0*C987B654A321` na `19108h`
+a neznámy znak preskočí. Príprava pred tým (`190A5h`): napájanie modemu
+a relé (`A0h` bity 1 a 2), pol sekundy čakania, `DFDEh` s `F2h` (zdvihnutie).
+Model vracia bit 5 vždy v jednotke (`ReadInputBuffer`), preto zoznam vzdá.
+
+**Ako `MEM.COM` na vytáčanie trafí.** Volanie stránky 0 nastaví `CBR` =
+`F2h` a zavolá logickú `E000h`, teda fyzickú `00000h` (výpočet na `4415h`:
+posun `+1000h`, `CBR` = `((stránka − 0Dh) >> 1) << 1`). Kód resetu tam
+prepne `CBR` na `0Bh` **počas behu z toho istého okna**, takže ďalšia
+inštrukcia sa načíta z fyzickej `19012h` — zo stredu `CALL E0A5h`. Bajty
+`A5 E0` sú `AND L` / `RET PO`; s `A` = `0Bh` a `L` = `00h` je výsledok nula
+s párnou paritou, `RET` sa nevykoná a beh padne na `LD E,A0h` / `CALL E095h`,
+teda na čakanie na oznamovací tón. To isté na skutočnom stroji.
+
+**Čo je spravené.** Položka **Stroj → Telefónna linka** (`ID_MACHINE_PHONELINE`)
+a `EurekaMachine::SetPhoneLine`: kým je linka pripojená, bit 5 je stále
+v nule. Majiteľ si výslovne vybral túto hrubšiu verziu pred verným modelom
+(tón len od zdvihnutia po prvú číslicu), lebo pokrýva aj vstup z `MEM.COM`,
+ktorý linku nezdvíha — vedome za cenu, že komunikačný program uvidí na
+pripojenej linke nosnú. Preto je predvolene vypnutá, **neukladá sa** do
+nastavení a kým je zapnutá, stojí v titulku („— telefónna linka“). Sonda má
+`+linka`/`-linka`. Drží to `CheckPhoneLine` v režime `dc` (výpis `linka=`):
+bit 5 v nule len s linkou, ostatné bity `A8h` sa nepohnú; overené mutáciou
+(ignorovaná linka zhodí kontrolu).
+
+**Čo sa zmeralo.** Majiteľ v okne s pripojenou linkou: Shift+F3 z `MEM.COM`
+vydá **osem tónov asi po sekunde**, ako na skutočnom stroji. Sonda to
+potvrdila až na druhý pokus: sekvencia `+linka kD6 mem~ ?PRIPRAVEN kC3
+?FUNKC s ?STRAN 0~ ?EPROM . kD2 dac:60000000` ukáže zdvihnutie (`80h` bity
+7 a 6 z `DFE3h`) a **2 626 zápisov do DAC po 540 cykloch**, teda generátor
+tónov. Bez `.` pred `kD2` prišiel kláves do editora v nevhodnej chvíli,
+volanie neprebehlo normálne a DAC mlčal — **tie behy nie sú meranie**.
+
+**Vyvrátené.** Prvá verzia tejto sekcie tvrdila podľa čítania kódu, že
+`POP DE` na `19040h` vyberie pri tomto vstupe `0067h` (trampolína, ktorú si
+`MEM.COM` skladá na `0064h`), tam je `C9h` = `I`, ktoré nie je v tabuľke
+DTMF, a že emulátor preto tóny nevydá ani s linkou. Meranie aj majiteľovo
+počutie hovoria opak. Stav zásobníka pri tomto vstupe teda nie je taký, ako
+sa odvodilo, a čo presne sa vytáča, sa nezisťovalo — pri potrebe to ukáže
+sonda s dočasným výpisom `DE` na `19055h`, nie ďalšie čítanie.
+
+Telefónny zoznam s linkou majiteľ vyskúšal v okne 26. 9. 2026: vytáča
+a je ho počuť v **pulznej aj tónovej voľbe**.
 
 ## 7. Nástroje
 

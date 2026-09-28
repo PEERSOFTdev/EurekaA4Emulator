@@ -75,6 +75,10 @@ BEGIN
         MENUITEM "&Hlasnejšie\tF11, Alt+šípka vpravo",          ID_MACHINE_LOUDER
         MENUITEM "&Tichšie\tF11, Alt+šípka vľavo",              ID_MACHINE_QUIETER
         MENUITEM "Nastaviť po&suvníky…",                        ID_MACHINE_SLIDERS
+        MENUITEM SEPARATOR
+        /* A check item without a shortcut: it is switched once in a while,
+           and every host shortcut is a key Eureka never gets again. */
+        MENUITEM "Telefónna &linka",                            ID_MACHINE_PHONELINE
     END
     POPUP "&Klávesnica"
     BEGIN

@@ -428,7 +428,7 @@ konzolový.
 | bit | názov | význam |
 |---|---|---|
 | 7, 6 | — | nepoužité |
-| 5 | `dcd0_mask` | aktívne v nule; detekcia nosnej z modemu AM7910. Pollované s počítadlom pokusov na 18F99, 18FB1, 19097 |
+| 5 | `dcd0_mask` | aktívne v nule; detekcia nosnej z modemu AM7910. Pollované s počítadlom pokusov na 18F99, 18FB1, 19097; na 19097 je to čakanie na oznamovací tón pred vytáčaním (HANDOFF 6.49) |
 | 3 | `ring_mask` | aktívne v nule; prítomnosť vyzváňacieho napätia (automatické zdvihnutie) |
 | 2 | `cts1_mask` | aktívne v nule; CTS na RS-232 |
 | 1 | `vm2_mask` | druhý komparátor: podľa `vmsel` externý voltmeter alebo **napätie batérie** |

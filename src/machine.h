@@ -281,6 +281,16 @@ class EurekaMachine {
   // Reset nor PowerOn touches them: they stay where the fingers left them.
   void SetRatePot(uint8_t level) { ratePot_ = level; }
   void SetVolume(double gain) { volume_ = gain; }
+  // A make-believe phone line: while it is on, the modem's carrier detect
+  // (A8h bit 5) reports a tone all the time.  That is what the dialler waits
+  // for at 19095 before it sends a single digit, so with it off the phone book
+  // gives up with "neni oznamovaci ton" and nothing is heard.  A real line
+  // would stop the tone once dialling starts, and a dial tone is not a
+  // carrier; this one does neither, on purpose -- the owner chose it so the
+  // mid-instruction entry MEM.COM reaches from 00000h, which never takes the
+  // line off hook, gets past the wait as well (HANDOFF 6.49).  Neither Reset
+  // nor PowerOn touches it: it is the socket, not the machine.
+  void SetPhoneLine(bool connected) { phoneLine_ = connected; }
 
   uint8_t debug_peek(uint16_t address) const { return Peek(address); }
   // The alarm the firmware last armed: registers 190h-197h in port order, the
@@ -555,6 +565,7 @@ class EurekaMachine {
   double couplingState_[2] = {};
   uint8_t ratePot_ = sliders::RatePotLevel(sliders::kRateDefault);
   double volume_ = 1.0;
+  bool phoneLine_ = false;
 };
 
 #endif
