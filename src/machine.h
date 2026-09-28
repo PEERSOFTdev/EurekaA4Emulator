@@ -32,6 +32,18 @@ class EurekaMachine {
   // layout: it loads bank values up to 70h and --diag reports no dropped
   // writes with RAM here, so RAM occupies the top 64K of the 19-bit space.
   static constexpr uint32_t kRamBase = 0x70000;
+  // The same 64K answers at 50000h, where SYSJUMPS.11 puts the RAM of every
+  // Standard Eureka.  The firmware never goes there (HANDOFF 6.44), but a
+  // program from disk may: MEM.COM lands its DMA reads of the EPROM in bank 5
+  // and picks the byte up from its own variables at 7xxxxh, and it works on a
+  // real Czech machine (HANDOFF 6.48).  memory_ keeps the one copy at kRamBase.
+  static constexpr uint32_t kRamMirrorBase = 0x50000;
+  static constexpr uint32_t kRamWindowMask = 0x70000;
+  static constexpr uint32_t Fold(uint32_t physical) {
+    return (physical & kRamWindowMask) == kRamMirrorBase
+               ? physical + (kRamBase - kRamMirrorBase)
+               : physical;
+  }
   // How much of memory_ a snapshot carries: everything from kRamBase up.
   static constexpr std::size_t kRamSnapshotBytes = kPhysicalSize - kRamBase;
 
@@ -346,6 +358,9 @@ class EurekaMachine {
   static void ChargeIoWaits(z80* cpu, uint16_t port);
 
   uint32_t PhysicalAddress(uint16_t logical) const;
+  // Every memory access, CPU or DMA, goes through these two, so the RAM mirror
+  // has only one place to be forgotten in.
+  uint8_t ReadPhysical(uint32_t physical) const { return memory_[Fold(physical)]; }
   void WritePhysical(uint32_t physical, uint8_t value, uint16_t pc);
   uint8_t Peek(uint16_t logical) const;
   void Poke(uint16_t logical, uint8_t value);

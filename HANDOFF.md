@@ -3210,6 +3210,12 @@ programy písané pre anglickú Eureku; samotné „Konec“ znamená, že model
 sa správa ako stroj. Neoverené je aj to, čo vráti čítanie z prázdneho
 pásma — nuly v modeli sú voľba, nie meranie.
 
+**Doplnené 26. 9. 2026: zrkadlo `5xxxxh` na `7xxxxh` je rozhodnuté a
+modelované** (6.48). Nerozhodol to RAM4B, ale `MEM.COM`, ktorý na
+skutočnom českom stroji číta EPROM cez DMA do banky 5 a funguje, a veta
+o štandardnej Eureke v `SYSJUMPS.11`. Čítanie z `4xxxxh` a `6xxxxh` zostáva
+nulové a neoverené.
+
 ### 6.45 Obnovovanie DRAM sa modeluje — `OUT 54,252` stroj spomalí (`ea4-e2m`)
 
 Podnet v tej istej správe ako 6.44: na skutočnom stroji z BASICu
@@ -3384,6 +3390,64 @@ Odteraz to drží `CheckProtectedDiskRefusesSave` v režime `wp` (výpis
 musí zaznieť „chráněn proti zápisu“, nesmie „vadn“ a súbor nesmie pribudnúť.
 Overené tou istou mutáciou: kontrola padne s prepisom „vadný disk.chyba 21“.
 Textový procesor ide tým istým BIOS 14, preto ho kontrola neopakuje.
+
+### 6.48 RAM odpovedá aj na 50000h — MEM.COM číta EPROM cez banku 5
+
+Podnet 26. 9. 2026: pamäťový editor `MEM.COM` (Turbo Pascal, 20 480 B,
+mimo repozitára v `D:\eureka\Diskety\comapl1`), ktorý napísal majiteľ.
+Na skutočnom stroji roky funguje, v emulátore ukazoval na stránke EPROM
+samé nuly. Zdroják sa stratil, rozobraté z binárky.
+
+**Ako editor číta EPROM.** SYSJUMPS nepoužíva (`.rom_read` na `CFCAh` sa
+v binárke nevolá). Má vlastnú procedúru na `21D0h`, ktorá naplní `SAR0`,
+`DAR0`, `BCR0`, zapíše `DMODE` = `02h` a spustí kanál 0 bitom DE0 v DSTAT.
+Pri zobrazení EPROM ju volá `2317h` s cieľom `B8DCh` v **banke 5** —
+fyzická `5B8DCh` — a bajt potom číta z tej istej premennej obyčajne, teda
+z fyzickej `7B8DCh`. Zdroj je v poriadku: stránka (4 KB) je v `B925h`,
+banka je jej horná polovica, adresa `(stránka & 0Fh) << 12` plus posun.
+Tú istú procedúru volá aj zápis reťazca do pamäte (`3951h`, zdroj aj cieľ
+v banke 5) a `2BEDh` (cieľ v banke 5).
+
+Pohľad do RAM ide priamo cez `LD L,(HL)` a volanie rutiny v ROM (`4459h`)
+cez priamo nastavené `CBR` a `CBAR` = `D0h` — preto obe fungovali, aj
+melódia z volania stránky 0 na posune 0.
+
+**Čo to hovorí o stroji.** Na skutočnom českom stroji to funguje len vtedy,
+ak `5xxxxh` a `7xxxxh` sú tá istá RAM. Sedí to s manuálom: `SYSJUMPS.11`
+v odseku o **štandardnej** Eureke (česká je štandardná, len s 256 KB ROM
+kvôli dátam reči) píše „The RAM always occupies addresses $50000 to
+$5FFFF“, kým česká ROM ju používa na `70000h` (`ram0_page equ 70h`). Tú
+vetu som najprv pripísal anglickej Advanced Eureke; majiteľ ma opravil —
+Advanced je až nasledujúci odsek. Sedí to aj s tým, čo sa hovorí o RAM4B
+(dvakrát „Dobrý večer“ na štandardnom stroji, 6.44).
+
+**Čo je spravené.** `EurekaMachine::Fold` prepočíta `5xxxxh` na `7xxxxh`
+a ide cez neho každý prístup do pamäte: čítanie procesora (`ReadPhysical`
+z `ReadMemory` a `Peek`), zápis (`WritePhysical`) aj oba kanály DMA,
+vrátane čítania zdroja v kanáli 0, ktoré predtým siahalo do `memory_`
+priamo. `memory_` drží RAM ďalej len raz, na `kRamBase`, takže snímka RAM
+sa nemení. Pásma `4xxxxh` a `6xxxxh` zostávajú prázdne — pre ne dôkaz
+nemáme.
+
+Drží to `CheckRamMirror` v režime `dc` (výpis `zrkadlo=`): bajt ROM cez
+DMA do banky 5, kópia z banky 5 cez DMA, čítanie aj zápis procesora cez
+`CBR` do banky 5. Referenčný bajt ide najprv do banky 7, aby porovnanie
+nestálo na zrkadle, ktoré sa testuje. Overené dvoma mutáciami: bez
+prepočtu pri zápise padnú všetky štyri kontroly, bez prepočtu pri čítaní
+dve (DMA z banky 5 a čítanie procesora).
+
+**Otvorené:** či editor v emulátore naozaj ukáže EPROM, overí majiteľ na
+`MEM.COM`; test stavia situáciu, program nespúšťa. A či by sa niečo
+zrkadlilo aj na `4xxxxh` a `6xxxxh`, sa z toho nedá povedať.
+
+`4xxxxh` sa prázdne nenecháva len pre chýbajúci dôkaz. `SYSJUMPS.11`
+hovorí, že stroje s EPROM 27C256 majú ROM aj na `40000h–4FFFFh`, lenže
+rozloženie ROM sa rozhoduje už pri preklade firmvéru: `SYSEQU.LIB` má
+prepínač `EPROM512` a podľa neho `rom4_page equ 40h` (27C256) alebo `08h`
+(27C512). Stroj s 27C256 má teda inú binárku, ktorá o ROM na `40000h`
+vie. Náš dump je zostava pre 27C512 — celých 256 KB na `00000h–3FFFFh`,
+ako to pre 27C512 opisuje `MEMMAP.E` — a image pre 27C256 nemáme. Keby sme
+ju mali, bol by to iný stroj, nie iné mapovanie tohto.
 
 ## 7. Nástroje
 

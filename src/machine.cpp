@@ -331,10 +331,11 @@ uint32_t EurekaMachine::PhysicalAddress(uint16_t logical) const {
 
 uint8_t EurekaMachine::ReadMemory(void* context, uint16_t logical) {
   auto* machine = static_cast<EurekaMachine*>(context);
-  return machine->memory_[machine->PhysicalAddress(logical)];
+  return machine->ReadPhysical(machine->PhysicalAddress(logical));
 }
 
 void EurekaMachine::WritePhysical(uint32_t physical, uint8_t value, uint16_t pc) {
+  physical = Fold(physical);
   if (physical >= kRamBase) {
     memory_[physical] = value;
     return;
@@ -352,7 +353,7 @@ void EurekaMachine::WriteMemory(void* context, uint16_t logical, uint8_t value) 
 }
 
 uint8_t EurekaMachine::Peek(uint16_t logical) const {
-  return memory_[PhysicalAddress(logical)];
+  return ReadPhysical(PhysicalAddress(logical));
 }
 
 void EurekaMachine::Poke(uint16_t logical, uint8_t value) {
@@ -996,7 +997,7 @@ void EurekaMachine::RunDma0() {
     // Routed through the guarded write so a stray descriptor cannot corrupt
     // the ROM image, which Reset() does not restore.
     WritePhysical((destination + index) & kPhysicalMask,
-                  memory_[(source + index) & kPhysicalMask], cpu_.pc);
+                  ReadPhysical((source + index) & kPhysicalMask), cpu_.pc);
   }
   io_[hw::kBcr0l] = io_[hw::kBcr0h] = 0;
   io_[hw::kDstat] &= static_cast<uint8_t>(~hw::kDstatDe0);
@@ -1050,7 +1051,7 @@ void EurekaMachine::RunDma1() {
     if (toMemory)
       WritePhysical(address & kPhysicalMask, ReadPort(&cpu_, port), cpu_.pc);
     else
-      WritePort(&cpu_, port, memory_[address & kPhysicalMask]);
+      WritePort(&cpu_, port, ReadPhysical(address & kPhysicalMask));
     address = static_cast<uint32_t>(address + step) & kPhysicalMask;
   }
 

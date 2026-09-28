@@ -684,7 +684,9 @@ neprepísal obsah pripojeného obrazu.
 ## Čo sa emuluje
 
 - inštrukčné jadro Z80/HD64180 a rozšírené opkódy Z180;
-- 19-bitový adresný priestor, ROM/RAM a MMU registre CBR/BBR/CBAR;
+- 19-bitový adresný priestor, ROM/RAM a MMU registre CBR/BBR/CBAR; RAM
+  odpovedá na 70000h aj na 50000h, kde ju má manuál, takže ju nájdu aj
+  programy z diskety, ktoré sa riadia ním;
 - PRT0/PRT1, interné vektorované prerušenia a oba kanály DMA;
 - braillová maticová klávesnica a rozhranie klávesnice PC/XT;
 - WD1772 na úrovni sektorov a CP/M BIOS na úrovni 128-bajtových záznamov;

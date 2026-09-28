@@ -36,7 +36,8 @@ Oficiálne názvy signálov sú prevzaté z `IOPORT.LIB`.
 
 ### Rozloženie RAM a buffery aplikácií
 
-RAM je 64 KB na fyzických 70000h–7FFFFh. Logické rozloženie je to, ktoré
+RAM je 64 KB na fyzických 70000h–7FFFFh, zrkadlená na 50000h–5FFFFh
+(HANDOFF 6.48). Logické rozloženie je to, ktoré
 manuál (`MEMORY.5`) volá **Standard Eureka A4** — len posunuté o 20000h,
 lebo anglické stroje majú RAM na 50000h. Doložené tromi nezávislými
 vecami: tiene latchov na C438h–C43Ah (manuál ich má presne tam),
@@ -95,6 +96,12 @@ jediné miesto, 18158, v obsluhe dialógu „inicializace eureky“ (reťazec na
 **Banky 04h až 06h sa neobjavia nikde** — ani v týchto argumentoch, ani
 v ostatných prenosoch DMA, ani v hodnotách BBR a CBR. Firmvér pamäť na
 40000h–6FFFFh nepoužíva ani neskúša; viď HANDOFF 6.44.
+
+Platí to pre firmvér, nie pre programy z diskety. Tá istá RAM odpovedá aj
+na **50000h–5FFFFh**, kde ju `SYSJUMPS.11` dáva každej štandardnej Eureke,
+a `MEM.COM` na to spolieha: EPROM číta cez DMA s cieľom v banke 5 a na
+skutočnom stroji funguje (HANDOFF 6.48). Model to robí cez
+`EurekaMachine::Fold`. O 40000h–4FFFFh a 60000h–6FFFFh doklad nemáme.
 
 **Telefónny zoznam sa takto neprenáša.** Pristupuje sa k nemu na mieste
 cez ukazovateľ (0F2F0: `LD HL,D000h` / `ADD HL,BC` / `LD (C46Eh),HL`)
