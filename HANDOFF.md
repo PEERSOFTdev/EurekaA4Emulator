@@ -3440,6 +3440,12 @@ dve (DMA z banky 5 a čítanie procesora).
 `MEM.COM`; test stavia situáciu, program nespúšťa. A či by sa niečo
 zrkadlilo aj na `4xxxxh` a `6xxxxh`, sa z toho nedá povedať.
 
+*Doplnené 28. 9. 2026:* prvá polovica toho odseku už neplatí. Podľa popisu
+PR #3 autor `MEM.COM` v okne emulátora overil a EPROM číta. Program ani
+tento stroj nemáme po ruke, takže sa to u nás zopakovať nedá; veta
+o `4xxxxh` a `6xxxxh` platí ďalej. Vetu o štandardnej Eureke
+v `SYSJUMPS.11` som skontroloval priamo v manuáli.
+
 `4xxxxh` sa prázdne nenecháva len pre chýbajúci dôkaz. `SYSJUMPS.11`
 hovorí, že stroje s EPROM 27C256 majú ROM aj na `40000h–4FFFFh`, lenže
 rozloženie ROM sa rozhoduje už pri preklade firmvéru: `SYSEQU.LIB` má
