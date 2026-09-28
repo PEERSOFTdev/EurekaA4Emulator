@@ -3627,6 +3627,23 @@ ktoré medzitým dostal niekto iný — a to je poškodenie dát, nie stratený
 riadok. Bezpečný tvar je až po `WM_EMU_STATE`, ktorým vlákno stroja hlási,
 že diagnostiku naozaj vyplo.
 
+**Zopakované pri zlúčení 28. 9. 2026 na Windows 11**, prenosná kópia
+v `build\rescue` s vlastným `config` a `--ram-disk --diag`:
+
+- `WM_SYSCOMMAND`/`SC_CLOSE` na okno konzoly: proces skončí do 30 ms
+  a v `config` je `pamat.bin`, 65 568 B.
+- Kontrola, `TerminateProcess` na ten istý emulátor: proces skončí,
+  `pamat.bin` **nevznikne**. Snímku teda naozaj zapisuje záchrana, nie niečo
+  iné na ceste von.
+
+Dve pasce pri opakovaní, obe tiché. Spustený z procesu, ktorý konzolu má
+(PowerShell, bash), sa emulátor k nej pripojí (`AttachToParentConsole`
+v `OpenConsole`) a vlastnú nevyrobí — meralo by sa cudzie okno. Spúšťal
+som ho preto cez Prieskumníka z odkazu `.lnk` s argumentmi. A `FindWindowW`
+podľa titulku „Eureka A4 — diagnostika“ okno nenašiel, hoci ho
+`EnumWindows` s tým titulkom vypíše; spoľahlivé je hľadať triedu
+`ConsoleWindowClass` s číslom procesu emulátora.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
