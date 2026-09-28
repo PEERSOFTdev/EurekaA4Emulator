@@ -103,6 +103,12 @@ a `MEM.COM` na to spolieha: EPROM číta cez DMA s cieľom v banke 5 a na
 skutočnom stroji funguje (HANDOFF 6.48). Model to robí cez
 `EurekaMachine::Fold`. O 40000h–4FFFFh a 60000h–6FFFFh doklad nemáme.
 
+Na štandardnom stroji. Niektoré stroje dostali v servise **druhý modul
+RAM** s 64 KB na 40000h–4FFFFh, zrkadlený na 60000h–6FFFFh z rovnakého
+dôvodu ako hlavná RAM; firmvér ho nepoužíva, programy z diskety áno. Model
+ho vie osadiť (`EurekaMachine::SetExtraRam`), predvolene je vypnutý —
+HANDOFF 6.51.
+
 **Telefónny zoznam sa takto neprenáša.** Pristupuje sa k nemu na mieste
 cez ukazovateľ (0F2F0: `LD HL,D000h` / `ADD HL,BC` / `LD (C46Eh),HL`)
 a horných 12 KB sa preň mapuje prestavením MMU. Vzor toho prestavenia je

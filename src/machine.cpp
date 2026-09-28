@@ -256,10 +256,16 @@ void EurekaMachine::CopyStateFrom(const EurekaMachine& other) {
 namespace {
 // The magic carries the format version: a layout change bumps the digits and
 // an older file simply reads back as kCorrupt.  Layout after it: 16 bytes ROM
-// MD5, then the 8 clock bytes, then kRamSnapshotBytes of RAM.
+// MD5, then the 8 clock bytes, then kRamSnapshotBytes of RAM.  The extra
+// module at 40000h is not in here but in a file of its own, so that versions
+// without it keep reading this one; anything else new should go the same way
+// rather than bump the digits (HANDOFF 6.51).
 constexpr char kSnapshotMagic[8] = {'E', 'A', '4', 'R', 'A', 'M', '0', '1'};
 constexpr std::size_t kSnapshotHeaderSize =
     sizeof(kSnapshotMagic) + 16 + 8;
+// The extra module's file: this magic, then kExtraRamBytes.  No ROM MD5 --
+// the module holds a program's data, which means the same under any ROM.
+constexpr char kExtraRamMagic[8] = {'E', 'A', '4', 'R', 'A', 'M', '4', 'B'};
 }  // namespace
 
 bool EurekaMachine::SaveSnapshot(const fs::path& path,
@@ -318,6 +324,42 @@ EurekaMachine::SnapshotResult EurekaMachine::LoadSnapshot(const fs::path& path,
   return SnapshotResult::kOk;
 }
 
+bool EurekaMachine::SaveExtraRamSnapshot(const fs::path& path,
+                                         std::wstring& error) const {
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  if (out) {
+    out.write(kExtraRamMagic, sizeof(kExtraRamMagic));
+    out.write(reinterpret_cast<const char*>(memory_.data() + kExtraRamBase),
+              kExtraRamBytes);
+  }
+  if (!out) {
+    error = L"Obsah rozšírenej RAM sa nepodarilo zapísať do súboru\r\n" +
+            path.wstring() +
+            L"\r\n\r\nPri ďalšom štarte bude rozšírená RAM prázdna.";
+    return false;
+  }
+  return true;
+}
+
+EurekaMachine::SnapshotResult EurekaMachine::LoadExtraRamSnapshot(
+    const fs::path& path, std::wstring& error) {
+  if (!extraRam_) return SnapshotResult::kMissing;
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return SnapshotResult::kMissing;
+
+  std::vector<char> bytes((std::istreambuf_iterator<char>(in)),
+                          std::istreambuf_iterator<char>());
+  if (bytes.size() != sizeof(kExtraRamMagic) + kExtraRamBytes ||
+      std::memcmp(bytes.data(), kExtraRamMagic, sizeof(kExtraRamMagic)) != 0) {
+    error = L"Obsah rozšírenej RAM je poškodený alebo je z inej verzie "
+            L"emulátora. Rozšírená RAM začína prázdna.";
+    return SnapshotResult::kCorrupt;
+  }
+  std::memcpy(memory_.data() + kExtraRamBase,
+              bytes.data() + sizeof(kExtraRamMagic), kExtraRamBytes);
+  return SnapshotResult::kOk;
+}
+
 uint32_t EurekaMachine::PhysicalAddress(uint16_t logical) const {
   const uint16_t bankStart = static_cast<uint16_t>(cbar_ & hw::kCbarBankMask) << 12;
   const uint16_t common1Start =
@@ -329,6 +371,12 @@ uint32_t EurekaMachine::PhysicalAddress(uint16_t logical) const {
   return physical & kPhysicalMask;
 }
 
+void EurekaMachine::SetExtraRam(bool fitted) {
+  if (!fitted)
+    std::fill_n(memory_.begin() + kExtraRamBase, kExtraRamBytes, 0);
+  extraRam_ = fitted;
+}
+
 uint8_t EurekaMachine::ReadMemory(void* context, uint16_t logical) {
   auto* machine = static_cast<EurekaMachine*>(context);
   return machine->ReadPhysical(machine->PhysicalAddress(logical));
@@ -336,13 +384,15 @@ uint8_t EurekaMachine::ReadMemory(void* context, uint16_t logical) {
 
 void EurekaMachine::WritePhysical(uint32_t physical, uint8_t value, uint16_t pc) {
   physical = Fold(physical);
-  if (physical >= kRamBase) {
+  if (physical >= kRamBase ||
+      (extraRam_ && (physical & kRamWindowMask) == kExtraRamBase)) {
     memory_[physical] = value;
     return;
   }
-  // Anything below kRamBase is ROM or an unmapped hole.  Dropping the write is
-  // the safe choice, but dropping it silently hides both firmware bugs and a
-  // wrongly placed RAM window, so it is counted when diagnostics are on.
+  // Anything else below kRamBase is ROM or an unmapped hole.  Dropping the
+  // write is the safe choice, but dropping it silently hides both firmware
+  // bugs and a wrongly placed RAM window, so it is counted when diagnostics
+  // are on.
   if (diag_.enabled()) diag_.NoteDroppedWrite(pc, physical, value);
 }
 

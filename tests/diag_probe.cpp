@@ -20,6 +20,7 @@
 // beside the alarm the firmware armed, "zvuk" for what the loudspeaker got,
 // "wav:SUBOR" to write those samples out as a WAV instead of counting them,
 // "rychlost:N" and "hlasitost:N" to move the two sliders (sliders.h),
+// "+banka4"/"-banka4" to fit or remove the extra RAM at 40000h,
 // "@TEXT" to time how long the console takes to show TEXT after the line
 // typed just before it, or a literal string typed on the emulated PC keyboard.  A switched-off
 // machine can wake itself on the alarm the same way it does on the hardware
@@ -220,6 +221,15 @@ int wmain(int argc, wchar_t** argv) {
           std::printf(" %05X(%llu)", seen[i].first,
                       static_cast<unsigned long long>(seen[i].second));
         std::printf("]\n");
+        continue;
+      }
+      if (token == L"+banka4" || token == L"-banka4") {
+        // The extra RAM module at 40000h (HANDOFF 6.51).  Fitting it mid-run
+        // is what the window never does -- it takes the setting at start-up --
+        // but a sequence can then run RAM4B with and without it.
+        machine->SetExtraRam(token.front() == L'+');
+        std::printf("%s -> [rozsirena RAM %s]\n", Label(token).c_str(),
+                    machine->extra_ram() ? "osadena" : "vybrata");
         continue;
       }
       if (token == L"trace") {

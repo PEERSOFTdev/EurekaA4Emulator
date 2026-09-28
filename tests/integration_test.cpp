@@ -729,6 +729,111 @@ bool CheckSnapshot(EurekaMachine& source, const wchar_t* romPath,
   return ok;
 }
 
+uint8_t PeekPhysical(EurekaMachine& machine, uint32_t physical);
+void PokePhysical(EurekaMachine& machine, uint32_t physical, uint8_t value);
+
+// The extra RAM module across power-off (HANDOFF 6.51).  Its contents go to a
+// file of their own, and the main snapshot has to stay exactly what versions
+// without the module read: same magic, same size.  That is the check which
+// holds the promise that fitting the module harms nothing older.  Then the
+// module round-trips, a snapshot without its file loads into a fitted machine
+// with the module empty, a machine without the module ignores the file, and a
+// damaged file is refused without touching the module.
+bool CheckExtraRamSnapshot(const wchar_t* romPath) {
+  bool ok = true;
+  auto expect = [&](bool good, const char* what) {
+    if (!good) {
+      std::cout << "  banka4: " << what << "\n";
+      ok = false;
+    }
+  };
+  std::error_code ec;
+  const fs::path dir = fs::temp_directory_path(ec);
+  const fs::path file = dir / L"ea4_snimka_b4.bin";
+  const fs::path extra = dir / L"ea4_snimka_b4_modul.bin";
+  const fs::path missing = dir / L"ea4_snimka_b4_niet.bin";
+  const fs::path damaged = dir / L"ea4_snimka_b4_zle.bin";
+  for (const fs::path& p : {file, extra, missing, damaged}) fs::remove(p, ec);
+
+  std::wstring err;
+  auto fresh = [&](bool fitted) {
+    auto machine = std::make_unique<EurekaMachine>();
+    if (!machine->LoadRom(romPath, err)) return std::unique_ptr<EurekaMachine>{};
+    machine->SetExtraRam(fitted);
+    // Wires the CPU to the machine, which PokePhysical's port writes need.
+    // Unlike Reset it leaves memory_ alone, so the loads below still land.
+    machine->PowerOn();
+    return machine;
+  };
+  constexpr uint32_t kFirst = 0x40000, kMiddle = 0x48123, kLast = 0x4ffff;
+  constexpr uint32_t kStandard = 0x70123;
+
+  auto source = fresh(true);
+  if (!source) {
+    std::wcout << L"  banka4: stroj sa nezostavil: " << err << L"\n";
+    return false;
+  }
+  PokePhysical(*source, kFirst, 0x11);
+  PokePhysical(*source, kMiddle, 0x22);
+  PokePhysical(*source, kLast, 0x33);
+  PokePhysical(*source, kStandard, 0x44);
+  if (!source->SaveSnapshot(file, err) ||
+      !source->SaveExtraRamSnapshot(extra, err)) {
+    std::wcout << L"  banka4: ulozenie zlyhalo: " << err << L"\n";
+    return false;
+  }
+
+  {
+    std::ifstream in(file, std::ios::binary);
+    const std::vector<char> bytes((std::istreambuf_iterator<char>(in)),
+                                  std::istreambuf_iterator<char>());
+    expect(bytes.size() == 8 + 16 + 8 + EurekaMachine::kRamSnapshotBytes &&
+               std::string(bytes.data(), 8) == "EA4RAM01",
+           "pamat.bin s modulom nie je to, co cita starsia verzia");
+  }
+
+  auto restored = fresh(true);
+  expect(restored->LoadSnapshot(file, err) == EurekaMachine::SnapshotResult::kOk,
+         "snimka s modulom sa nenacitala");
+  expect(restored->LoadExtraRamSnapshot(extra, err) ==
+             EurekaMachine::SnapshotResult::kOk,
+         "subor modulu sa nenacital");
+  expect(PeekPhysical(*restored, kFirst) == 0x11 &&
+             PeekPhysical(*restored, kMiddle) == 0x22 &&
+             PeekPhysical(*restored, kLast) == 0x33,
+         "obsah modulu neprezil ulozenie a nacitanie");
+  expect(PeekPhysical(*restored, kMiddle + 0x20000) == 0x22,
+         "obnoveny modul nie je vidiet na 6xxxxh");
+  expect(PeekPhysical(*restored, kStandard) == 0x44,
+         "standardna RAM neprezila vedla modulu");
+
+  auto noFile = fresh(true);
+  expect(noFile->LoadSnapshot(file, err) == EurekaMachine::SnapshotResult::kOk &&
+             noFile->LoadExtraRamSnapshot(missing, err) ==
+                 EurekaMachine::SnapshotResult::kMissing,
+         "bez suboru modulu nevratil kOk a kMissing");
+  expect(PeekPhysical(*noFile, kMiddle) == 0, "modul bez suboru nie je prazdny");
+
+  auto withoutModule = fresh(false);
+  expect(withoutModule->LoadSnapshot(file, err) ==
+             EurekaMachine::SnapshotResult::kOk,
+         "stroj bez modulu snimku nenacital");
+  expect(withoutModule->LoadExtraRamSnapshot(extra, err) ==
+                 EurekaMachine::SnapshotResult::kMissing &&
+             PeekPhysical(*withoutModule, kMiddle) == 0,
+         "stroj bez modulu cital subor modulu");
+
+  { std::ofstream(damaged, std::ios::binary) << "toto nie je modul"; }
+  auto broken = fresh(true);
+  expect(broken->LoadExtraRamSnapshot(damaged, err) ==
+                 EurekaMachine::SnapshotResult::kCorrupt &&
+             PeekPhysical(*broken, kMiddle) == 0,
+         "poskodeny subor modulu nevratil kCorrupt");
+
+  for (const fs::path& p : {file, extra, missing, damaged}) fs::remove(p, ec);
+  return ok;
+}
+
 // The output has to settle to silence once the machine stops talking, whatever
 // the DAC is left holding.  It holds its last written value for as long as
 // nothing writes it again, and after an utterance that is wherever the final
@@ -988,6 +1093,59 @@ bool CheckRefreshCycles(EurekaMachine& machine) {
   return ok;
 }
 
+// CPU access to a physical address the way a program makes it: through CBR
+// and common area 1, whatever BBR is.  CBAR is set so that common area 1
+// starts at D000h, as the firmware leaves it -- a machine that has only been
+// powered on still has the reset value there.  Both are put back afterwards.
+class CbrWindow {
+ public:
+  CbrWindow(EurekaMachine& machine, uint32_t physical)
+      : machine_(machine),
+        cbar_(machine.debug_in(hw::kCbar)),
+        cbr_(machine.debug_in(hw::kCbr)) {
+    machine.debug_out(hw::kCbar, static_cast<uint8_t>(kWindow >> 8));
+    machine.debug_out(hw::kCbr, static_cast<uint8_t>(((physical & ~0xfffu) - kWindow) >> 12));
+    logical_ = static_cast<uint16_t>(kWindow + (physical & 0xfff));
+  }
+  ~CbrWindow() {
+    machine_.debug_out(hw::kCbr, cbr_);
+    machine_.debug_out(hw::kCbar, cbar_);
+  }
+  uint16_t logical() const { return logical_; }
+
+ private:
+  static constexpr uint16_t kWindow = 0xd000;  // common area 1
+  EurekaMachine& machine_;
+  const uint8_t cbar_;
+  const uint8_t cbr_;
+  uint16_t logical_ = 0;
+};
+
+uint8_t PeekPhysical(EurekaMachine& machine, uint32_t physical) {
+  const CbrWindow window(machine, physical);
+  return machine.debug_peek(window.logical());
+}
+
+void PokePhysical(EurekaMachine& machine, uint32_t physical, uint8_t value) {
+  const CbrWindow window(machine, physical);
+  machine.debug_poke(window.logical(), value);
+}
+
+// One byte over DMA channel 0, set up the way MEM.COM does it (HANDOFF 6.48).
+void DmaByte(EurekaMachine& machine, uint32_t from, uint32_t to) {
+  machine.debug_out(hw::kSar0l, static_cast<uint8_t>(from));
+  machine.debug_out(hw::kSar0h, static_cast<uint8_t>(from >> 8));
+  machine.debug_out(hw::kSar0b, static_cast<uint8_t>(from >> 16));
+  machine.debug_out(hw::kDar0l, static_cast<uint8_t>(to));
+  machine.debug_out(hw::kDar0h, static_cast<uint8_t>(to >> 8));
+  machine.debug_out(hw::kDar0b, static_cast<uint8_t>(to >> 16));
+  machine.debug_out(hw::kBcr0l, 1);
+  machine.debug_out(hw::kBcr0h, 0);
+  machine.debug_out(hw::kDmode, 0x02);  // what MEM.COM writes
+  // DWE1 set leaves channel 1 alone; DWE0 clear lets DE0 through.
+  machine.debug_out(hw::kDstat, hw::kDstatDe0 | hw::kDstatDwe1);
+}
+
 // RAM answers at 50000h as well as 70000h (HANDOFF 6.48).  MEM.COM reads the
 // EPROM a byte at a time by DMA into bank 5 and takes the byte from its own
 // variable, which the CPU sees at 7xxxxh; with writes below kRamBase dropped
@@ -995,7 +1153,7 @@ bool CheckRefreshCycles(EurekaMachine& machine) {
 // bank 5, and a program may point CBR there, so all four paths are checked:
 // DMA into and out of the mirror, CPU read and CPU write through it.  The ROM
 // byte is first copied into bank 7, so the reference does not lean on the
-// mirror under test.  Every CPU access goes through CBR, whatever BBR is.
+// mirror under test.
 bool CheckRamMirror(EurekaMachine& machine) {
   constexpr uint32_t kRomByte = 0x1d3a0;  // first SYSJUMPS entry, C3h
   constexpr uint32_t kReference = 0x78010;
@@ -1003,35 +1161,12 @@ bool CheckRamMirror(EurekaMachine& machine) {
   constexpr uint32_t kDmaCopy = 0x78030;    // copied back from 58020h
   constexpr uint32_t kCpuTarget = 0x58040;  // lands at 78040h
   constexpr uint32_t kMirrorOffset = 0x20000;
-  constexpr uint16_t kWindow = 0xd000;  // common area 1
 
-  const uint8_t cbr = machine.debug_in(hw::kCbr);
-  auto map = [&](uint32_t physical) {
-    machine.debug_out(hw::kCbr, static_cast<uint8_t>(((physical & ~0xfffu) - kWindow) >> 12));
-    return static_cast<uint16_t>(kWindow + (physical & 0xfff));
-  };
-  auto peek = [&](uint32_t physical) {
-    const uint8_t value = machine.debug_peek(map(physical));
-    machine.debug_out(hw::kCbr, cbr);
-    return value;
-  };
+  auto peek = [&](uint32_t physical) { return PeekPhysical(machine, physical); };
   auto poke = [&](uint32_t physical, uint8_t value) {
-    machine.debug_poke(map(physical), value);
-    machine.debug_out(hw::kCbr, cbr);
+    PokePhysical(machine, physical, value);
   };
-  auto dma = [&](uint32_t from, uint32_t to) {
-    machine.debug_out(hw::kSar0l, static_cast<uint8_t>(from));
-    machine.debug_out(hw::kSar0h, static_cast<uint8_t>(from >> 8));
-    machine.debug_out(hw::kSar0b, static_cast<uint8_t>(from >> 16));
-    machine.debug_out(hw::kDar0l, static_cast<uint8_t>(to));
-    machine.debug_out(hw::kDar0h, static_cast<uint8_t>(to >> 8));
-    machine.debug_out(hw::kDar0b, static_cast<uint8_t>(to >> 16));
-    machine.debug_out(hw::kBcr0l, 1);
-    machine.debug_out(hw::kBcr0h, 0);
-    machine.debug_out(hw::kDmode, 0x02);  // what MEM.COM writes
-    // DWE1 set leaves channel 1 alone; DWE0 clear lets DE0 through.
-    machine.debug_out(hw::kDstat, hw::kDstatDe0 | hw::kDstatDwe1);
-  };
+  auto dma = [&](uint32_t from, uint32_t to) { DmaByte(machine, from, to); };
 
   for (uint32_t at : {kReference, kDmaTarget + kMirrorOffset, kDmaCopy,
                       kCpuTarget + kMirrorOffset})
@@ -1084,6 +1219,62 @@ bool CheckPhoneLine(EurekaMachine& machine) {
     std::cout << "  linka: pohli sa aj ine bity A8h\n";
     ok = false;
   }
+  return ok;
+}
+
+// The extra 64K at 40000h that a service fitted into some machines
+// (EurekaMachine::kExtraRamBase).  Without it 4xxxxh and 6xxxxh must stay the
+// hole they are on a stock machine -- writes dropped, reads zero -- because
+// RAM4B tells the two apart.  With it both answer as one bank, by CPU and by
+// DMA, and neither lands in the standard RAM at 7xxxxh.  Removing the module
+// has to take its contents with it.  Leaves the machine without it.
+bool CheckExtraRam(EurekaMachine& machine) {
+  constexpr uint32_t kRomByte = 0x1d3a0;  // first SYSJUMPS entry, C3h
+  constexpr uint32_t kBank4 = 0x42000;
+  constexpr uint32_t kBank6 = 0x6a000;    // lands at 4A000h when fitted
+  constexpr uint32_t kDmaTarget = 0x68020;  // lands at 48020h
+  constexpr uint32_t kDmaCopy = 0x78050;    // copied back from 48020h
+  constexpr uint32_t kMirrorOffset = 0x20000;
+
+  auto peek = [&](uint32_t physical) { return PeekPhysical(machine, physical); };
+  auto poke = [&](uint32_t physical, uint8_t value) {
+    PokePhysical(machine, physical, value);
+  };
+  bool ok = true;
+  auto expect = [&](bool good, const char* what) {
+    if (!good) {
+      std::cout << "  banka4: " << what << "\n";
+      ok = false;
+    }
+  };
+
+  machine.SetExtraRam(false);
+  const uint8_t standard = peek(kBank4 + 2 * kMirrorOffset);  // 72000h
+  poke(kBank4, 0xa5);
+  poke(kBank6, 0x3c);
+  expect(peek(kBank4) == 0 && peek(kBank6) == 0 &&
+             peek(kBank4 + kMirrorOffset) == 0,
+         "bez modulu sa zapis na 4xxxxh alebo 6xxxxh neztratil");
+
+  machine.SetExtraRam(true);
+  poke(kBank4, 0xa5);
+  poke(kBank6, 0x3c);
+  expect(peek(kBank4) == 0xa5, "zapis CPU na 42000h sa neprecital");
+  expect(peek(kBank4 + kMirrorOffset) == 0xa5, "62000h nezrkadli 42000h");
+  expect(peek(kBank6 - kMirrorOffset) == 0x3c, "zapis na 6A000h nedosiel na 4A000h");
+  expect(peek(kBank4 + 2 * kMirrorOffset) == standard,
+         "zapis do banky 4 prepisal standardnu RAM");
+
+  poke(kDmaCopy, 0);
+  DmaByte(machine, kRomByte, kDmaTarget);
+  const uint8_t rom = peek(kDmaTarget - kMirrorOffset);
+  expect(rom != 0, "DMA do banky 6 nedoslo do banky 4");
+  DmaByte(machine, kDmaTarget - kMirrorOffset, kDmaCopy);
+  expect(peek(kDmaCopy) == rom, "DMA z banky 4 necita modul");
+
+  machine.SetExtraRam(false);
+  expect(peek(kBank4) == 0 && peek(kBank6 - kMirrorOffset) == 0,
+         "vybraty modul si nechal obsah");
   return ok;
 }
 
@@ -2543,9 +2734,10 @@ int wmain(int argc, wchar_t** argv) {
     const bool sampling = CheckInterruptSampledAtEndOfInstruction(*machine);
     const bool mirror = CheckRamMirror(*machine);
     const bool line = CheckPhoneLine(*machine);
+    const bool extra = CheckExtraRam(*machine);
     const bool passed = settles && aliases && internal && highByte &&
                         blockFlags && waits && refresh && sampling && mirror &&
-                        line;
+                        line && extra;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=DC"
               << " ticho=" << (settles ? "ok" : "chyba")
               << " porty=" << (aliases ? "ok" : "chyba")
@@ -2556,7 +2748,8 @@ int wmain(int argc, wchar_t** argv) {
               << " obnovovanie=" << (refresh ? "ok" : "chyba")
               << " vzorkovanie=" << (sampling ? "ok" : "chyba")
               << " zrkadlo=" << (mirror ? "ok" : "chyba")
-              << " linka=" << (line ? "ok" : "chyba") << "\n";
+              << " linka=" << (line ? "ok" : "chyba")
+              << " banka4=" << (extra ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
   }
 
@@ -2570,8 +2763,12 @@ int wmain(int argc, wchar_t** argv) {
   }
 
   if (std::wstring(argv[3]) == L"snimka") {
-    const bool passed = CheckSnapshot(*machine, argv[1], argv[2]);
-    std::cout << (passed ? "PASS" : "FAIL") << " mode=SNIMKA\n";
+    const bool snapshot = CheckSnapshot(*machine, argv[1], argv[2]);
+    const bool extra = CheckExtraRamSnapshot(argv[1]);
+    const bool passed = snapshot && extra;
+    std::cout << (passed ? "PASS" : "FAIL") << " mode=SNIMKA"
+              << " ram=" << (snapshot ? "ok" : "chyba")
+              << " banka4=" << (extra ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
   }
 
