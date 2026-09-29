@@ -1,0 +1,156 @@
+# Vydanie (ea4-hg9.3). Spúšťa ho majiteľ, nič iné:
+#
+#   gh workflow run vydanie.yml
+#
+# Číslo si dopočíta samo: rok a mesiac podľa dnešného dátumu (UTC), poradie
+# o jedno vyššie než posledná značka v tom mesiaci, v novom mesiaci od 1.
+#
+# Poradie je zámerné: najprv číslo, potom zostavenie a testy, potom balík a
+# jeho kontrola, a značka na GitHube vznikne AŽ pri zverejnení. Keď čokoľvek
+# zlyhá, nezostane po tom ani značka, ani polovičné vydanie.
+
+name: Vydanie
+
+on:
+  workflow_dispatch:
+
+# Dve vydania naraz by si spočítali to isté číslo.
+concurrency:
+  group: vydanie
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cislo:
+    runs-on: ubuntu-latest
+    outputs:
+      znacka: ${{ steps.cislo.outputs.znacka }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Ďalšie číslo vydania
+        id: cislo
+        shell: pwsh
+        run: |
+          # Vydáva sa z main a nič iné. Vetva s rozrobenou vecou by sa inak
+          # ponúkla každému používateľovi ako aktualizácia.
+          if ('${{ github.ref }}' -ne 'refs/heads/main') {
+            Write-Error "Vydanie sa robí z main, nie z ${{ github.ref }}."; exit 1
+          }
+          # Ten istý commit dvakrát by boli dve čísla pre jedno EXE.
+          $here = git tag --points-at HEAD --list 'v[0-9]*'
+          if ($here) { Write-Error "Tento commit už vydaný je: $here"; exit 1 }
+
+          $now = [DateTime]::UtcNow
+          $prefix = "v$($now.Year).$($now.Month)."
+          $serials = git tag --list "$prefix*" | ForEach-Object {
+            if ($_ -match "^v$($now.Year)\.$($now.Month)\.(\d+)$") { [int]$Matches[1] }
+          }
+          $next = 1 + ($serials | Measure-Object -Maximum).Maximum
+          $tag = "$prefix$next"
+          "Vydanie: $tag"
+          "znacka=$tag" >> $env:GITHUB_OUTPUT
+
+  zostavenie:
+    needs: cislo
+    uses: ./.github/workflows/zostavenie.yml
+    with:
+      znacka: ${{ needs.cislo.outputs.znacka }}
+
+  zverejnenie:
+    needs: [cislo, zostavenie]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      ZNACKA: ${{ needs.cislo.outputs.znacka }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: EurekaA4Emulator
+          path: vydanie
+
+      # EXE musí o sebe hovoriť to isté číslo, pod ktorým ho zverejníme --
+      # inak by kontrola aktualizácií ponúkala to isté vydanie dookola.
+      - name: Verzia EXE
+        shell: pwsh
+        run: |
+          $want = $env:ZNACKA.Substring(1)
+          $have = (Get-Item vydanie\EurekaA4Emulator.exe).VersionInfo.ProductVersion
+          if ($have -ne $want) { Write-Error "EXE hovorí '$have', vydanie je '$want'."; exit 1 }
+          "EXE je $have"
+
+      # Výslovný zoznam súborov, nie "zabaľ bin\" -- tam lokálne leží A4ROM.DMP
+      # a firmvér sa nedistribuuje (ea4-blw, ROM-NOTICE.txt).
+      - name: Balík
+        shell: pwsh
+        run: |
+          $name = "EurekaA4Emulator-$($env:ZNACKA.Substring(1))"
+          $stage = "balik\$name"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item vydanie\EurekaA4Emulator.exe, vydanie\eurekaA4Emulator.nvda-addon, `
+                    Spustit-Eureku.bat, README.md, LICENSE.txt, ROM-NOTICE.txt $stage
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path balik).Path,
+              "$PWD\vydanie\$name.zip")
+
+      # Poistka proti firmvéru v čomkoľvek, čo ide von: podľa mena aj podľa
+      # veľkosti (ROM má 262144 bajtov), aj vnútri ZIP-u a doplnku.
+      - name: Kontrola, že vo vydaní nie je ROM
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $bad = @()
+          function Test-Entry($name, $size) {
+            if ($name -match '(?i)\.(dmp|wav|rom)$|a4rom' -or $size -eq 262144) { $script:bad += $name }
+          }
+          foreach ($file in Get-ChildItem vydanie -File) {
+            Test-Entry $file.Name $file.Length
+            if ($file.Extension -in '.zip', '.nvda-addon') {
+              $zip = [IO.Compression.ZipFile]::OpenRead($file.FullName)
+              foreach ($entry in $zip.Entries) {
+                Test-Entry "$($file.Name):$($entry.FullName)" $entry.Length
+              }
+              $zip.Dispose()
+            }
+          }
+          if ($bad) { Write-Error "Vo vydaní je niečo, čo vyzerá ako ROM: $($bad -join ', ')"; exit 1 }
+          Get-ChildItem vydanie -File | ForEach-Object { "$($_.Name) $($_.Length)" }
+
+      # Kontrolné súčty; podľa nich si aktualizácia overí stiahnuté EXE.
+      - name: Kontrolné súčty
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem vydanie -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          }
+          [IO.File]::WriteAllText("$PWD\vydanie\SHA256SUMS.txt", ($lines -join "`n") + "`n")
+          Get-Content vydanie\SHA256SUMS.txt
+
+      # Poznámky sú predmety commitov od posledného vydania. Pri prvom by to
+      # bola celá história, a tá do poznámok nepatrí.
+      - name: Zverejnenie
+        shell: pwsh
+        run: |
+          $previous = git describe --tags --abbrev=0 --match 'v[0-9]*' 2>$null
+          if ($previous) {
+            $notes = "Zmeny od $($previous):`n`n" + ((git log --no-merges --pretty='- %s' "$previous..HEAD") -join "`n")
+          } else {
+            $notes = 'Prvé vydanie.'
+          }
+          $notes += "`n`nROM v balíku nie je, treba si ju dodať zo svojho stroja -- viď ROM-NOTICE.txt a README."
+          Set-Content -Encoding utf8NoBOM poznamky.md $notes
+          $version = $env:ZNACKA.Substring(1)
+          gh release create $env:ZNACKA --target $env:GITHUB_SHA `
+            --title "Eureka A4 Emulator $version" --notes-file poznamky.md `
+            (Get-ChildItem vydanie -File).FullName
+          if ($LASTEXITCODE -ne 0) { exit 1 }

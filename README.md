@@ -1,9 +1,22 @@
-# Eureka A4 Emulator 0.1.0
+# Eureka A4 Emulator
 
 Natívny 64-bitový emulátor počítača Eureka A4 pre Windows. Používa pôvodný
 `A4ROM.DMP`, vykonáva jeho strojový kód a prehráva 8-bitový DAC, takže hlas,
 hudba a zvuky vznikajú tým istým algoritmom a z tej istej fonémovej databázy
 ako v Eureke.
+
+## Stiahnutie
+
+Hotové vydania sú na GitHube v časti **Releases**:
+<https://github.com/lpintes/EurekaA4Emulator/releases/latest>. Stiahnite
+súbor `EurekaA4Emulator-ROK.MESIAC.PORADIE.zip` a rozbaľte ho do
+ľubovoľného priečinka. Je v ňom emulátor, dávka `Spustit-Eureku.bat`,
+doplnok pre NVDA (`eurekaA4Emulator.nvda-addon`, nainštaluje sa Enterom)
+a tento návod. Emulátor a doplnok sú na stránke vydania aj samostatne.
+Súbor `SHA256SUMS.txt` obsahuje ich kontrolné súčty.
+
+Verzia má tvar rok.mesiac.poradie, napríklad `2026.9.1` je prvé vydanie
+v septembri 2026.
 
 ## ROM si musíte dodať sami
 
@@ -81,7 +94,7 @@ Ukončenie a bezpečné uloženie disku: `F11`, `Ctrl+Q`. Reset: `F11`,
 `Ctrl+R`. Úplný zoznam skratiek je v ponuke Pomocník alebo pod `F11`,
 `Ctrl+H`. Nápoveda k prepínačom príkazového riadka: `--help`.
 Verziu emulátora povie Pomocník → O programe, prepínač `--version` aj
-vlastnosti súboru EXE. Má tvar rok.mesiac.poradie, napríklad `2026.9.1`.
+vlastnosti súboru EXE.
 
 **Okno berie Eureke tri klávesy a nič viac:** `F12` (ponuka), `F11`
 a `Shift+F11`. Ostatné skratky sú dvojhmatové — najprv `F11`, potom

@@ -17,6 +17,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Vydanie (vydanie.yml) volá tento istý workflow, aby sa zostavovalo na
+  # jednom mieste. Podá mu značku, ktorú tu dostane len lokálny klon.
+  workflow_call:
+    inputs:
+      znacka:
+        description: Značka vydania, napríklad v2026.9.1
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -30,6 +38,15 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      # Len pri vydaní. Značka vznikne v tomto klone, nie na GitHube, takže
+      # git describe ju nájde a EXE, testy aj VERSIONINFO dostanú presne túto
+      # verziu -- Makefile ani dávky o vydaní nemusia nič vedieť. Na GitHub
+      # ju zapíše až zverejnenie, a to len keď všetko prešlo.
+      - name: Značka vydania
+        if: inputs.znacka != ''
+        shell: pwsh
+        run: git tag "${{ inputs.znacka }}"
 
       # release: false = použi C:\msys64 z runnera a len doinštaluj balíky.
       # gettext je msgfmt pre preklad hlások doplnku (usr\bin, nie mingw64).

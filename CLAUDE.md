@@ -950,6 +950,27 @@ prestalo platiť, nie povolenie prepisovať okolie.
 
 Commituj len keď o to používateľ požiada. Nepushuj bez vyzvania.
 
+### Vydanie navrhni, keď je to vhodné
+
+Vydania sú tu **častejšie než v bežnom projekte** a je to zámer: emulátor
+používajú ľudia, ktorým sa aktualizácia ponúkne sama, takže opravená chyba
+alebo nová funkcia má k nim dôjsť hneď, nie v ročnom balíku. Po commite,
+ktorý to spĺňa, preto **sám navrhni vydanie** — jednou vetou pri návrhu
+commitu alebo po ňom. Nie každý commit je vydanie.
+
+Vhodné je, keď sa od posledného vydania zmenilo niečo, **čo používateľ
+pocíti**: opravená chyba, nová funkcia, zmena správania, zvuku alebo textov,
+nový doplnok NVDA. A len keď je to hotové podľa „Čo znamená hotovo“ a
+pushnuté — vydanie sa zostavuje z `main` na GitHube, nie z lokálneho stromu.
+
+Nevhodné je vydanie len z dokumentácie, testov, workflowov, beadov, HANDOFF
+alebo z vnútorného prerábania bez zmeny správania. A ani uprostred rozrobenej
+veci, ktorá má viac krokov — vtedy až po poslednom z nich.
+
+Vydanie **nespúšťaj sám**. Je verejné a ponúkne sa každému používateľovi, takže
+rozhoduje majiteľ. Spúšťa sa `gh workflow run vydanie.yml`; číslo si workflow
+dopočíta sám (epic `ea4-hg9`).
+
 Konce riadkov drží `.gitattributes`, nie ty: `* text=auto` ukladá do
 repozitára LF, `*.bat` zostáva CRLF (`cmd.exe` na LF-only dávkach vie
 zlyhať na `if/else` a `goto`, a až za behu) a `*.py` LF kvôli štýlu NVDA.
