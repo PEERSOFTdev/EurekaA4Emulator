@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-rem Zostavi testy a pusti vsetkych devatnast naraz. Su to samostatne procesy,
+rem Zostavi testy a pusti vsetkych dvadsat naraz. Su to samostatne procesy,
 rem nic nezdielaju, takze paralelne bezia bez rizika. Wall time urcuje
 rem najdlhsi z nich -- rezim kbd.
 rem
@@ -11,7 +11,7 @@ rem           run-tests.bat C:\cesta\a4rom.dmp
 rem
 rem Technical Manual sa hlada v %EUREKATECH%, inak v C:\b\eurekatech. Je to
 rem material tretich stran a v repozitari nie je -- vid ROM-NOTICE.txt. Bez
-rem neho sa preskocia rezimy com a wp a testov je sedemnast, nie devatnast.
+rem neho sa preskocia rezimy com a wp a testov je osemnast, nie dvadsat.
 
 if "%MINGW64%"=="" set "MINGW64=C:\msys64\mingw64"
 set "PATH=%MINGW64%\bin;%PATH%"
@@ -64,7 +64,7 @@ if "%JOBS%"=="" set "JOBS=4"
 
 rem -k dobehne aj po prvom zlyhani, nech je vidiet vsetky naraz.
 rem --output-sync=target drzi vypis kazdeho testu pohromade; bez neho sa
-rem riadky devatnastich procesov premiesaju a vysledok sa neda precitat.
+rem riadky dvadsiatich procesov premiesaju a vysledok sa neda precitat.
 echo.
 echo === Testy ===
 mingw32-make -j%JOBS% -k --output-sync=target MINGW64="%MINGW64:\=/%" ROM="%A4ROM:\=/%" DISK="%TESTDISK:\=/%" check

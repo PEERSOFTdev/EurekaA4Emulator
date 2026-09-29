@@ -8,6 +8,7 @@
 #include "disk_split.h"
 #include "host_console.h"
 #include "res/resource.h"
+#include "version.h"
 #include "win/dialog.h"
 
 namespace {
@@ -882,6 +883,7 @@ void MainWindow::SetDiskState(DiskState disk) {
 
 std::wstring MainWindow::AboutText() const {
   return L"Eureka A4 Emulator\r\n"
+         L"Verzia " + std::wstring(version::Current()) + L"\r\n"
          L"\r\n"
          L"Emulátor osobného počítača Robotron Eureka A4 pre nevidiacich.\r\n"
          L"Procesor Hitachi HD64180 na 6,144 MHz, zvuk 48 kHz.\r\n"

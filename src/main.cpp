@@ -28,6 +28,7 @@
 #include "machine.h"
 #include "main_window.h"
 #include "settings.h"
+#include "version.h"
 #include "win/dialog.h"
 #include "win/window.h"
 
@@ -96,10 +97,10 @@ void Warn(const std::wstring& message) {
 
 void PrintUsage() {
   host::Print(
-      L"Eureka A4 Emulator\r\n\r\n"
+      L"Eureka A4 Emulator " + std::wstring(version::Current()) + L"\r\n\r\n"
       L"Použitie: EurekaA4Emulator.exe [--rom A4ROM.DMP] [--disk PRIECINOK]\r\n"
       L"                              [--ram-disk] [--no-disk] [--diag]\r\n"
-      L"                              [--braille] [--pc]\r\n"
+      L"                              [--braille] [--pc] [--version]\r\n"
       L"Ak --disk vynecháte, vloží sa disketa z minulého spustenia. Pri\r\n"
       L"prvom spustení, keď si emulátor nemá čo pamätať, sa zobrazí výber\r\n"
       L"priečinka; jeho zrušením sa Eureka spustí bez diskety.\r\n"
@@ -171,6 +172,13 @@ int Run() {
     if (argument == L"--help" || argument == L"-h") {
       host::OpenConsole();
       PrintUsage();
+      host::HoldConsole();
+      CoUninitialize();
+      return 0;
+    }
+    if (argument == L"--version") {
+      host::OpenConsole();
+      host::Print(std::wstring(version::Current()) + L"\r\n");
       host::HoldConsole();
       CoUninitialize();
       return 0;

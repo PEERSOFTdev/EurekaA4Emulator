@@ -17,11 +17,15 @@
 # clang mlčky preskočí.  Absolútna cesta by fungovala tiež, ale tento
 # súbor je v repozitári a na inom stroji by bola nesprávna.
 #
+# -I../build je pre src/version.cpp: ea4_version.h vygeneruje až Makefile
+# do build/ (verzia z git describe), takže bez prvého prekladu ju clangd
+# nenájde ani tak.
+#
 # Prepínače musia zodpovedať tým z Makefile; toto je jediné miesto,
 # kde sú zdvojené.
 CompileFlags:
   Add: [-std=c++20, --target=x86_64-w64-windows-gnu,
-        -Isrc, -I../src, -I../../src,
+        -Isrc, -I../src, -I../../src, -I../build,
         -DWINVER=0x0A00, -D_WIN32_WINNT=0x0A00]
 
 ---

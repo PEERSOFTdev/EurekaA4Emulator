@@ -80,6 +80,8 @@ zošedené.
 Ukončenie a bezpečné uloženie disku: `F11`, `Ctrl+Q`. Reset: `F11`,
 `Ctrl+R`. Úplný zoznam skratiek je v ponuke Pomocník alebo pod `F11`,
 `Ctrl+H`. Nápoveda k prepínačom príkazového riadka: `--help`.
+Verziu emulátora povie Pomocník → O programe, prepínač `--version` aj
+vlastnosti súboru EXE. Má tvar rok.mesiac.poradie, napríklad `2026.9.1`.
 
 **Okno berie Eureke tri klávesy a nič viac:** `F12` (ponuka), `F11`
 a `Shift+F11`. Ostatné skratky sú dvojhmatové — najprv `F11`, potom

@@ -31,6 +31,13 @@ encoding this could accidentally use -- the failure being guarded against is
 the quiet one, where a saved path comes back mangled and the slot simply points
 somewhere else. Runs without the ROM, in the system temp folder.
 
+`update_test.cpp` covers versions: that only a bare `year.month.serial` (with or
+without the tag's `v`) counts as a release, and that releases compare as numbers.
+Both failures are quiet -- compared as text, `2026.9.5` beats `2026.10.1` and
+from October on nobody is offered the update; a development build that parsed
+as a release would offer to replace itself with an older EXE. No ROM, no
+network, no files.
+
 `disk_test.cpp` covers the diskette model: capacity, naming, swapping, the
 unformatted state, and what a file looks like on its way back to the host.
 Everything it needs it makes for itself in the system temp folder, because a
@@ -271,7 +278,7 @@ is third-party material and therefore **not in this repository** -- see
 is `C:\b\eurekatech`) and `run-tests.bat` copies the file in for you.
 
 Without it the `com` and `wp` modes are skipped and the suite reports
-seventeen `PASS` lines instead of nineteen, saying so as it goes.  Both modes run that
+eighteen `PASS` lines instead of twenty, saying so as it goes.  Both modes run that
 same `READ.COM`: `com` to start it, `wp` to show a write-protected diskette
 still reads (`CheckProtectedDiskStillReads`).  Nothing else needs the manual.
 Copy the file yourself only if you are running `integration_test.exe` by hand
