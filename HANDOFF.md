@@ -3795,6 +3795,56 @@ prázdnym modulom a nič by nepovedal. `SetCloseRescue` v `main.cpp` preto
 zapisuje aj `pamat-banka4.bin`, rovnako ako riadne ukončenie. Test na to
 nesiaha, rovnako ako na pravidlá mazania.
 
+### 6.52 Vydania na GitHube a aktualizácie
+
+29. 9. 2026, epic `ea4-hg9`. Pravidlá, ktoré z toho plynú, stoja v
+CLAUDE.md (odsek o verzii v Zostavení, „Aktualizácie sú dve vrstvy“ v
+Rozvrstvení GUI, „Vydanie navrhni, keď je to vhodné“ v Gite), pre
+používateľa v README (Stiahnutie, Aktualizácie, Verzia vlastného
+zostavenia). Tu je doloženie.
+
+**Verzia** je značka `vROK.MESIAC.PORADIE` a nikde inde. Zmerané: druhý
+`build.bat` nič nepreloží; `VERSION=2026.9.1` dá vo vlastnostiach EXE
+`2026.9.1.0`; bez gitu na PATH vyjde `0.0.0-nezname` a preklad dobehne.
+Porovnanie ako čísla drží `update_test`, overené mutáciou (prípona za číslami
+prijatá → šesť zlyhaní).
+
+**Workflowy.** `zostavenie.yml` beží na Windows s msys2 z runnera, tými
+istými dávkami ako lokálne, ~1,5 min; balíky msys2 kešuje akcia sama,
+preklad zámerne nie (zdôvodnené v súbore). `vydanie.yml` volá ten istý
+workflow so značkou, ktorá existuje len v klone runnera, takže
+`git describe` ju nájde bez zmeny v `Makefile`. Výpočet čísla overený v
+dočasnom klone (po `2026.9.9` a `2026.9.10` vyjde `2026.9.11`, značka
+s príponou sa nepočíta). Poistka proti ROM overená podstrčeným súborom
+s 262 144 B vnútri ZIP-u — našla ho. Vydané: `v2026.9.1` až `v2026.9.3`,
+všetky zelené.
+
+**Aktualizácia sa pýta pred ROM, disketou aj strojom**, preto pri štarte
+nič neukladá. Sonda mimo repozitára proti skutočnému `v2026.9.1`: otázka
+na `releases/latest` vráti značku z presmerovania bez API; stiahnuté EXE
+súhlasí so `SHA256SUMS.txt`; bežiaci súbor sa odsunie na `.old`, `.new`
+nezostane. Skúšky majiteľa s NVDA na kópii s `VERSION=2026.9.0`: Neskôr
+(ďalší štart v ten deň sa nepýta), Preskočiť (zapíše
+`preskocena-verzia`), Aktualizovať pri štarte aj z ponuky, Reštartovať
+teraz Nie (beží ďalej, ďalší štart je nová verzia a `.old` zmizne) aj Áno
+(fokus, pokračovanie z pamäte bežiaceho stroja).
+
+**Dve pasce, obe tiché:** program, ktorý linkuje `TaskDialogIndirect` bez
+manifestu Common Controls 6, sa vôbec nenačíta (bash: kód 127 bez slova);
+a nová verzia spustená až po zavretí posledného vlastného okna dostala
+okno za terminálom. Druhú našiel majiteľ; preto sa nová verzia spúšťa
+z časovača dialógu sťahovania a reštart z ponuky vedie cez `ShutDown`
+ešte pri otvorenom okne.
+
+**Neoverené:** zrušenie počas sťahovania, nesúhlasiaci súčet, priečinok bez
+práva zápisu (ponuka stránky vydania) a štart bez internetu. Kód na to je,
+žiadna z ciest nebola vyvolaná.
+
+**Vedľajší nález:** návrat k staršej verzii zmaže z `nastavenia.txt`
+kľúče, ktoré nepozná (`aktualizacie`, `posledna-kontrola`) — tak je súbor
+navrhnutý a hovorí to jeho hlavička. Chýbajúci kľúč znamená zapnuté,
+takže to aktualizácie nevypne.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
