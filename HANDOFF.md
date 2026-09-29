@@ -3922,6 +3922,52 @@ medzerník) z nastavenia odíde. Tlačiareň má vlastnú sadu (Režim, F9, F8
 musí ich brať z CNTLA1/CNTLB1, ktoré ROM z týchto bajtov nastaví.
 Že sa zmena parametra do registrov naozaj prepíše, zatiaľ odmerané nie je.
 
+**Doplnené v ten istý deň: prepíše, a hneď pri odchode z nastavenia.**
+Sonda `kC3 . kD0 . kD0 . kD0 .` povie „nastavení parametrů přenosu“,
+„19200“, „38400“ a `C4E4` ide `06h` → `07h` → `08h`. Pri odchode („parametry
+přenosu jsou nastaveny“) ROM na `18423`–`18445` prečíta a zapíše CNTLB1
+`12h` → `10h` a CNTLA1 zostane `64h`. SS klesne z ÷4 na ÷1, teda
+6 144 000 / (10 · 16 · 1) = **38 400 Bd**, presne to, čo stroj ohlásil.
+Model teda musí takt počítať z CNTLB1 pri každom zápise, nie raz pri boote.
+
+**Všetkých šesť parametrov sériovej linky** (každý stlačený raz,
+`kD0`…`kD5`, bajty `C4E4`–`C4E8`, zápis pri odchode na `18423`–`18445`):
+
+- Shift+F1 **rýchlosť** („19200“…) — `C4E4`, CNTLB1 bity SS.
+- Shift+F2 **dátové bity** („7“) — `C4E5` bit 2 (`0Ch` → `08h`),
+  CNTLA1 MOD2.
+- Shift+F3 **parita** („sudá“) — `C4E5` bit 1 zapína, bit 3 volí lichú
+  (`08h` → `02h`), CNTLA1 MOD1 a CNTLB1 PEO.
+- Shift+F4 **stop bity** („dva stop bity“) — `C4E5` bit 0 (`02h` → `03h`),
+  CNTLA1 MOD0.
+- Shift+F5 **riadenie toku** („DC znaky“, teda XON/XOFF) — `C4E6` `00h` →
+  `01h`. **Len firmvér** (`C597`, 6.4), do registrov sa nepíše.
+- Shift+F6 **emulácia terminálu** („VT 100“) — `C4E8` `00h` → `01h`.
+  **Len firmvér**, do registrov sa nepíše.
+
+Po tejto sérii zapísal CNTLA1 `64h` → `63h` (7 bitov, parita, 2 stop bity)
+a CNTLB1 `12h` → `02h` (PEO = párna). Bity `C4E5` sedia s `modem_ctl_format`
+v `DEVICES.10`. Štyri parametre teda patria UART-u a model ich musí brať
+z CNTLA1/CNTLB1 — dĺžka znaku je štart + 7 alebo 8 dátových bitov +
+prípadná parita + 1 alebo 2 stop bity, a pri 7 bitoch prejde len dolných
+sedem. Dva sú čisto vec firmvéru a model sa o ne nestará.
+
+**Celé cykly, overené proti vzorcu z dátového listu HD64180** (rýchlosť =
+φ / (PS · DR · SS), φ = 6 144 000, PS bit 5 ÷10/÷30, DR bit 3 ÷16/÷64,
+SS bity 2–0 ÷1…÷64, `111` je vonkajší takt). Rýchlosť cyklí 9600 → 19200
+→ 38400 → 150 → 300 → 600 → 1200 → 2400 → 4800 a CNTLB1 (bez PEO) je
+`02h`, `01h`, `00h`, `0Eh`, `0Dh`, `06h`, `05h`, `04h`, `03h` — každá
+hodnota dá presne to, čo stroj povedal; 150 a 300 potrebujú DR ÷64, ktorý
+pri 9600 nebolo vidno. PS ÷30 ROM nepoužíva nikde. Parita cyklí „sudá“
+(CNTLA1 `66h`, PEO 0) → „lichá“ (`66h`, PEO 1) → „bez parity“ (`64h`).
+Parametre sa teda dajú brať **z registrov vzorcom**, nie zo zoznamu hodnôt
+firmvéru, a dá to správny výsledok pre každú kombináciu.
+
+Pri tom sa znovu ukázalo to isté ako pri tlači: `k20` z nastavenia
+**neodišiel** a ďalší kláves (`kC2`) sa v ňom zobral ako F3, modemová
+parita („sudá“). Odišiel až text za ním. Medzerník ako hotový kód na
+výzvach „ľubovoľný kláves“ nedôjde — patrí to k `ea4-7zw.5`.
+
 Pripravenosť na vysielanie je
 tá istá ako pri tlači (`184F2`: TDRE, `A8h` bit 2 v nule, `C595` bit 1);
 DCD sa na ASCI1 nečíta.
