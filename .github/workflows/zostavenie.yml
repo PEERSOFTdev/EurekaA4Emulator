@@ -1,0 +1,89 @@
+# Zostavenie a testy bez ROM pri každom pushi do main a pri každom pull
+# requeste (ea4-hg9.2).
+#
+# Beží na Windows s msys2, nie krížovým prekladom z Linuxu: tak idú tie isté
+# build.bat, build-tests.bat a build-addon.bat ako na stroji majiteľa, a doplnok
+# NVDA linuxový náprotivok nemá a mať nemá (CLAUDE.md). msys2 je na runneri
+# predinštalovaný v C:\msys64, takže predvolené cesty v dávkach platia.
+#
+# ROM sem nepatrí ani ako tajný súbor -- je to firmvér (ROM-NOTICE.txt). Bežia
+# preto len štyri testy, ktoré ju nepotrebujú; šestnásť režimov
+# integration_test zostáva na run-tests.bat.
+
+name: Zostavenie
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zostavenie:
+    runs-on: windows-latest
+    steps:
+      # Celá história aj so značkami: bez nich git describe nenájde verziu
+      # a zostavenie by sa volalo 0.0.0-hash.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # release: false = použi C:\msys64 z runnera a len doinštaluj balíky.
+      # gettext je msgfmt pre preklad hlások doplnku (usr\bin, nie mingw64).
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          release: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            gettext
+
+      # "Hotovo" v tomto projekte znamená bez jediného varovania, a make pri
+      # varovaní neskončí chybou -- tak ho chytíme vo výstupe.
+      - name: Emulátor
+        shell: pwsh
+        run: |
+          $out = cmd /c .\build.bat 2>&1
+          $out
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($out -match 'warning:') { Write-Error 'Preklad hlási varovanie.'; exit 1 }
+
+      - name: Testy (zostavenie)
+        shell: pwsh
+        run: |
+          $out = cmd /c .\build-tests.bat 2>&1
+          $out
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($out -match 'warning:') { Write-Error 'Preklad testov hlási varovanie.'; exit 1 }
+
+      # Tie isté ciele, ktoré púšťa run-tests.bat; zoznam režimov je len
+      # v Makefile.
+      - name: Testy bez ROM
+        shell: cmd
+        run: |
+          set "PATH=C:\msys64\mingw64\bin;%PATH%"
+          mingw32-make MINGW64=C:/msys64/mingw64 --output-sync=target -k check-codec check-disk check-settings check-update
+
+      # build-addon.bat bez msgfmt len varuje a zabalí doplnok bez prekladu;
+      # tu to má byť chyba, nie tichý anglický doplnok.
+      - name: Doplnok NVDA
+        shell: cmd
+        run: |
+          if not exist C:\msys64\usr\bin\msgfmt.exe (echo Chyba msgfmt. & exit /b 1)
+          call .\build-addon.bat
+          if errorlevel 1 exit /b 1
+
+      # Výslovný zoznam, nie celé bin\ -- lokálne v ňom býva A4ROM.DMP
+      # (ea4-blw). Artefakt sa dá stiahnuť len prihlásený; pre ľudí sú vydania.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EurekaA4Emulator
+          path: |
+            bin/EurekaA4Emulator.exe
+            bin/eurekaA4Emulator.nvda-addon
+          if-no-files-found: error
+          retention-days: 30
