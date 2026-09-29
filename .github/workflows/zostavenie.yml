@@ -48,6 +48,13 @@ jobs:
         shell: pwsh
         run: git tag "${{ inputs.znacka }}"
 
+      # Cache: balíky msys2 si akcia kešuje sama (cache: true je predvolené,
+      # vo výpise "Cache hit", ~69 MB), takže sa nesťahujú, len rozbaľujú.
+      # Preklad sa ZÁMERNE nekešuje (29. 9. 2026): vydaná binárka má vzniknúť
+      # z čistého stromu -- projekt sa už popálil na objekte, ktorý nezodpovedal
+      # zdrojáku (CLAUDE.md, Makefile) -- checkout aj tak dá súborom čas "teraz",
+      # takže cache build\ by make neušetrila nič, a ccache by dal ~30 s z ~90.
+      #
       # release: false = použi C:\msys64 z runnera a len doinštaluj balíky.
       # gettext je msgfmt pre preklad hlások doplnku (usr\bin, nie mingw64).
       # msys2 odporúča prejsť z MINGW64 na UCRT64; tu zostáva MINGW64 zámerne,

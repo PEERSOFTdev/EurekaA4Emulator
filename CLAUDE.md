@@ -386,6 +386,13 @@ Overené mutáciou: `CP_UTF8` → `CP_ACP` v `settings.cpp` zhodí tri kontroly.
 Drží aj **rozšírenú RAM** (`rozsirena-ram=`, HANDOFF 6.51) — naopak: chýbajúci
 kľúč aj iné slovo než `1` znamenajú vypnuté, a `0` sa píše tiež, lebo súbor je
 jediné miesto, kde ten prepínač je.
+Drží aj **aktualizácie** (`aktualizacie=`, `posledna-kontrola=`,
+`preskocena-verzia=`, `ea4-hg9.4`): rovnako ako zachovanie RAM chýbajúci kľúč
+aj iné slovo než `0` znamenajú zapnuté — súbor spred aktualizácií ich nesmie
+ticho vypnúť. Overené mutáciou (`!= L"0"` → `== L"1"`).
+Pravidlá samotnej ponuky — čo je značka vydania v presmerovaní GitHubu, súčet
+zo `SHA256SUMS.txt`, že vývojové zostavenie neponúka nič a preskočená verzia sa
+neponúkne, novšia než ona áno — drží `update_test` (`src/update.*`, bez siete).
 Drží aj **posuvníky** (`rychlost-reci=`, `hlasitost=`, `ea4-06x`): že chýbajúci
 kľúč znamená stred, že poloha prežije zápis aj čítanie, že slovo v súbore
 nechá predvolenú polohu (čítané ako nula by hlasitosť ticho stlmilo) a číslo

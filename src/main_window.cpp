@@ -501,7 +501,7 @@ void MainWindow::RegisterCommands() {
 
   OnCommand(ID_TOOLS_SETTINGS, [this] {
     SettingsDialog dialog(emulator_.mode(), emulator_.diagnostics(),
-                          settings_.keep_ram());
+                          settings_.keep_ram(), settings_.check_updates());
     if (dialog.ShowModal(hwnd_, IDD_SETTINGS) != IDOK) return;
     // Turning diagnostics on is the request for somewhere to read them: this
     // program has no console until something asks for one.  Done here, on the
@@ -510,7 +510,12 @@ void MainWindow::RegisterCommands() {
     // Posted unconditionally; the worker ignores a mode it is already in.
     emulator_.PostSetMode(dialog.mode());
     emulator_.PostSetDiagnostics(dialog.diagnostics());
-    // The one setting in this dialog that outlives the run.  Persist it, and
+    // Takes effect at the next start, which is the only place it is asked.
+    if (dialog.check_updates() != settings_.check_updates()) {
+      settings_.SetCheckUpdates(dialog.check_updates());
+      SaveSettings();
+    }
+    // Outlives the run like the switch above.  Persist it, and
     // if it just went off, drop any snapshot already on disk: turning it off
     // is the user asking for a clean start, and a stale file left behind would
     // resume a month-old state the next time it is switched back on.

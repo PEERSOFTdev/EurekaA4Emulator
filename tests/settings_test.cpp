@@ -77,6 +77,59 @@ void MissingFileIsDefaults() {
   Check(settings.slot(1).empty(), "chybajuci subor nechava sloty prazdne");
 }
 
+// Absent means on, like zachovat-ram: a file written before the key existed
+// must not quietly switch the updates off for everyone who upgrades.
+void UpdateKeysRoundTrip() {
+  {
+    Settings settings(FileNamed("neexistuje.txt"));
+    settings.Load();
+    Check(settings.check_updates(), "chybajuci subor: aktualizacie su zapnute");
+    Check(settings.last_update_check().empty() &&
+              settings.skipped_version().empty(),
+          "chybajuci subor: ziadna kontrola ani preskocena verzia");
+  }
+  const fs::path file = FileNamed("aktualizacie.txt");
+  std::wstring error;
+  {
+    Settings settings(file);
+    settings.SetCheckUpdates(false);
+    settings.SetLastUpdateCheck(L"2026-09-29");
+    settings.SetSkippedVersion(L"2026.9.2");
+    Check(settings.Save(error), "ulozenie aktualizacii prejde", Narrow(error));
+  }
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(!loaded.check_updates(), "vypnute aktualizacie prezije zapis aj citanie");
+    Check(loaded.last_update_check() == L"2026-09-29", "datum kontroly prezije");
+    Check(loaded.skipped_version() == L"2026.9.2", "preskocena verzia prezije");
+  }
+  const std::string raw = ReadRaw(file);
+  Check(raw.find("aktualizacie=0") != std::string::npos,
+        "vypnutie je v subore ako aktualizacie=0");
+  {
+    Settings settings(file);
+    settings.Load();
+    settings.SetCheckUpdates(true);
+    settings.SetSkippedVersion(L"");
+    settings.Save(error);
+  }
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(loaded.check_updates(), "zapnute aktualizacie prezije zapis aj citanie");
+    Check(loaded.skipped_version().empty(), "zrusena preskocena verzia zo suboru zmizne");
+  }
+  Check(ReadRaw(file).find("aktualizacie=1") != std::string::npos,
+        "zapnutie je v subore ako aktualizacie=1");
+  WriteRaw(file, "aktualizacie=nie\r\n");
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(loaded.check_updates(), "ine slovo nez 0 aktualizacie nevypne");
+  }
+}
+
 void KeepRamSwitchRoundTrips() {
   // Absent from the file means on: a settings file from a version that never
   // knew the switch must not silently stop keeping the RAM (ea4-dh1).
@@ -581,6 +634,7 @@ int main() {
   MissingFileIsDefaults();
   KeepRamSwitchRoundTrips();
   ExtraRamSwitchRoundTrips();
+  UpdateKeysRoundTrip();
   KeyboardModeRoundTrips();
   SlidersRoundTrip();
   SliderPositionsMapToTheHardware();

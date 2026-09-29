@@ -14,6 +14,7 @@ bool SettingsDialog::OnInit() {
   SetChecked(IDC_MODE_PC, mode_ == InputMode::kPc);
   SetChecked(IDC_DIAGNOSTICS, diagnostics_);
   SetChecked(IDC_KEEP_RAM, keepRam_);
+  SetChecked(IDC_CHECK_UPDATES, checkUpdates_);
   // false: let the dialog manager focus the first tab stop, which is the radio
   // group.  It then announces the whole group, not just one button.
   return false;
@@ -23,6 +24,7 @@ bool SettingsDialog::OnOk() {
   mode_ = IsChecked(IDC_MODE_BRAILLE) ? InputMode::kBraille : InputMode::kPc;
   diagnostics_ = IsChecked(IDC_DIAGNOSTICS);
   keepRam_ = IsChecked(IDC_KEEP_RAM);
+  checkUpdates_ = IsChecked(IDC_CHECK_UPDATES);
   return true;
 }
 

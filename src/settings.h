@@ -105,6 +105,23 @@ class Settings {
   int volume() const { return volume_; }
   void SetVolume(int position);
 
+  // Whether the start-up checks GitHub for a newer release (update.h).
+  // Default on, and like keep_ram only an explicit "0" turns it off, so a file
+  // from before the key existed does not quietly stop the updates.  The switch
+  // is in Nastavenia.
+  bool check_updates() const { return checkUpdates_; }
+  void SetCheckUpdates(bool check) { checkUpdates_ = check; }
+  // The day the last check got an answer, "YYYY-MM-DD", so the start-up asks
+  // at most once a day.  Kept as written; update::CheckDue interprets it.
+  const std::wstring& last_update_check() const { return lastUpdateCheck_; }
+  void SetLastUpdateCheck(std::wstring day) { lastUpdateCheck_ = std::move(day); }
+  // The release the user answered "Preskočiť túto verziu" to, "2026.9.2".
+  // Only that one is skipped; a newer release is offered again.
+  const std::wstring& skipped_version() const { return skippedVersion_; }
+  void SetSkippedVersion(std::wstring version) {
+    skippedVersion_ = std::move(version);
+  }
+
   // An out-of-range number reads empty and writes nowhere, so a caller that
   // miscounts cannot corrupt the file or walk off the array.
   const std::wstring& slot(int number) const;
@@ -140,6 +157,9 @@ class Settings {
   bool brailleKeyboard_ = false;
   int speechRate_ = sliders::kRateDefault;
   int volume_ = sliders::kVolumeDefault;
+  bool checkUpdates_ = true;
+  std::wstring lastUpdateCheck_;
+  std::wstring skippedVersion_;
   std::array<std::wstring, kSlots> slots_;
   // In the order they were locked, so the file stays diffable and a lock the
   // user set is not silently reordered under them.

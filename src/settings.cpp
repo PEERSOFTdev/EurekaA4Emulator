@@ -27,6 +27,9 @@ constexpr wchar_t kKeyboardBraille[] = L"braillovska";
 constexpr wchar_t kKeyboardPc[] = L"externa";
 constexpr char kSpeechRateKey[] = "rychlost-reci";
 constexpr char kVolumeKey[] = "hlasitost";
+constexpr char kCheckUpdatesKey[] = "aktualizacie";
+constexpr char kLastUpdateCheckKey[] = "posledna-kontrola";
+constexpr char kSkippedVersionKey[] = "preskocena-verzia";
 constexpr char kSlotPrefix[] = "slot";
 // A locked diskette, one per line: "zamok1=C:\Hry".  Numbered rather than
 // repeated under one key, because the parser here takes the last value for a
@@ -177,6 +180,19 @@ void Settings::Load() {
       extraRam_ = value == L"1";
       continue;
     }
+    if (key == kCheckUpdatesKey) {
+      // Same rule as keep_ram: only "0" turns it off.
+      checkUpdates_ = value != L"0";
+      continue;
+    }
+    if (key == kLastUpdateCheckKey) {
+      lastUpdateCheck_ = std::move(value);
+      continue;
+    }
+    if (key == kSkippedVersionKey) {
+      skippedVersion_ = std::move(value);
+      continue;
+    }
     if (key == kKeyboardKey) {
       // Only the one word turns it round.  A misspelt or unknown value leaves
       // the PC keyboard rather than being guessed at: read as braille it would
@@ -245,6 +261,12 @@ bool Settings::Save(std::wstring& error) const {
           (brailleKeyboard_ ? kKeyboardBraille : kKeyboardPc) + L"\r\n";
   text += L"rychlost-reci=" + std::to_wstring(speechRate_) + L"\r\n";
   text += L"hlasitost=" + std::to_wstring(volume_) + L"\r\n";
+  // Written at its default, like zachovat-ram, so the switch can be found.
+  text += std::wstring(L"aktualizacie=") + (checkUpdates_ ? L"1" : L"0") + L"\r\n";
+  if (!lastUpdateCheck_.empty())
+    text += L"posledna-kontrola=" + lastUpdateCheck_ + L"\r\n";
+  if (!skippedVersion_.empty())
+    text += L"preskocena-verzia=" + skippedVersion_ + L"\r\n";
   if (!lastDisk_.empty()) text += L"posledna-disketa=" + lastDisk_ + L"\r\n";
   for (int number = 1; number <= kSlots; ++number) {
     const auto index = static_cast<std::size_t>(number - 1);

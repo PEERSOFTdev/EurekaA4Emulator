@@ -78,7 +78,7 @@ endif
 EMU_NAMES  := main machine md5 virtual_disk cpm_disk disk_stash disk_layout \
               disk_split text_codec audio_player \
               diagnostics host_console emulator_thread main_window dialogs \
-              settings version
+              settings version update
 # Nezavisle na emulatore, da sa vziat do ineho projektu tak ako je.
 WIN_NAMES  := window dialog
 EMU_OBJS   := $(addprefix $(BUILD)/,$(addsuffix .o,$(EMU_NAMES))) \
@@ -172,7 +172,8 @@ $(BIN)/settings_test.exe: $(BUILD)/test_settings_test.o $(BUILD)/settings.o | $(
 	$(CXX) $(STATIC) -o $@ $^ -lole32 -lshell32 -luuid
 
 # Verzia a aktualizacie, bez ROM a bez siete. Obycajny main.
-$(BIN)/update_test.exe: $(BUILD)/test_update_test.o $(BUILD)/version.o | $(BIN)
+$(BIN)/update_test.exe: $(BUILD)/test_update_test.o $(BUILD)/version.o \
+                       $(BUILD)/update.o | $(BIN)
 	$(CXX) $(STATIC) -o $@ $^
 
 # Hole jadro bez stroja; ZEXDOC nie je v repozitari, preto nie je ani

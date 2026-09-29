@@ -35,8 +35,11 @@ somewhere else. Runs without the ROM, in the system temp folder.
 without the tag's `v`) counts as a release, and that releases compare as numbers.
 Both failures are quiet -- compared as text, `2026.9.5` beats `2026.10.1` and
 from October on nobody is offered the update; a development build that parsed
-as a release would offer to replace itself with an older EXE. No ROM, no
-network, no files.
+as a release would offer to replace itself with an older EXE. It also holds the
+update rules in `src/update.*`: the tag read from GitHub's redirect, the hash
+read from `SHA256SUMS.txt`, and when an update is offered (never by a
+development build, never the skipped version, again for one newer than it).
+No ROM, no network, no files.
 
 `disk_test.cpp` covers the diskette model: capacity, naming, swapping, the
 unformatted state, and what a file looks like on its way back to the host.
