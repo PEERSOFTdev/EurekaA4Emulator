@@ -677,6 +677,12 @@ lebo NVDA považuje doplnky za odvodené dielo (`nvda-addon/COPYING.txt`).
   naštartovala za terminálom a hľadala sa Alt+Tabom. Preto overenie, výmena aj
   štart bežia v `Finish` na časovači dialógu, a `main.cpp` si pri štarte fokus
   vypýta aj výslovne (`SetForegroundWindow`).
+  Z toho istého dôvodu je ukončovacia cesta v `main.cpp` funkcia `ShutDown`:
+  reštart po ručnej aktualizácii (Pomocník, `ea4-hg9.5`) ju spustí **ešte pri
+  otvorenom okne** cez `MainWindow::SetUpdateRestart`, spustí novú verziu a až
+  potom okno zavrie. Snímku RAM pritom zapíše aj bez vypnutia stroja —
+  rovnako ako záchrana pri zavretí konzoly (6.50), lebo reštart kvôli
+  aktualizácii nie je rozhodnutie o stroji.
 - Súradnice sa nepočítajú nikde. Rozloženie dialógov je v dialógových
   jednotkách v `.rc` a škáluje sa s fontom. Ak by niektorý dialóg pýtal
   layout engine, je príliš zložitý na dialóg.

@@ -19,7 +19,7 @@
 namespace updater {
 
 struct Latest {
-  enum class Kind { kFound, kNoRelease, kFailed };
+  enum class Kind { kFound, kNoRelease, kFailed, kCancelled };
   Kind kind = Kind::kFailed;
   std::wstring tag;    // kFound: "v2026.9.2"
   std::wstring error;  // kFailed: why, in words for the user
@@ -36,11 +36,18 @@ Latest FetchLatest(DWORD timeoutMs);
 // machine the user started (owner's decision, 29. 9. 2026).
 Latest FetchLatestWithin(DWORD milliseconds);
 
+// The check the user asked for from the menu (ea4-hg9.5): no cap at all --
+// someone on a slow network knows it and chose to wait -- but a dialog saying
+// what is going on, with Zrušiť.  Cancelling gives kCancelled.
+Latest FetchLatestAsked(HWND owner);
+
 enum class Choice { kUpdate, kLater, kSkip };
 
 // "Je k dispozícii verzia ...", with Aktualizovať, Neskôr and Preskočiť túto
-// verziu.  Closing the dialog is Neskôr.
-Choice AskToUpdate(HWND owner, const std::wstring& tag);
+// verziu.  Closing the dialog is Neskôr.  restartsItself says whether the
+// emulator starts again on its own after the update (at start-up it does;
+// with the machine running the restart is asked separately).
+Choice AskToUpdate(HWND owner, const std::wstring& tag, bool restartsItself);
 
 enum class Installed { kRestarted, kInstalled, kCancelled, kFailed };
 

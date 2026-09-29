@@ -1,6 +1,7 @@
 #ifndef EUREKA_MAIN_WINDOW_H
 #define EUREKA_MAIN_WINDOW_H
 
+#include <functional>
 #include <string>
 
 #include "dialogs.h"
@@ -32,6 +33,13 @@ class MainWindow : public win::Window {
   // at construction any more.  The title is read out on every Alt+Tab and
   // NVDA+T, so it has to say what is in the drive now.
   void SetDiskState(DiskState disk);
+
+  // What a restart after a manual update runs before the window closes: the
+  // whole shutdown and the new version's start (main.cpp).  The window only
+  // decides when; main.cpp owns the machine and knows how.
+  void SetUpdateRestart(std::function<void()> restart) {
+    updateRestart_ = std::move(restart);
+  }
 
  protected:
   LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) override;
@@ -89,6 +97,8 @@ class MainWindow : public win::Window {
   // already off -- then closing loses nothing.
   bool ConfirmClosingWithoutPowerDown();
   void SaveSettings();
+  // Pomocník -> Skontrolovať aktualizácie (ea4-hg9.5).
+  void CheckForUpdates();
   // Moves the two sliders to these positions, clamped to their travel, and
   // remembers them.  Both at once because the dialog sets both; a shortcut
   // passes the other one unchanged.
@@ -137,6 +147,7 @@ class MainWindow : public win::Window {
   // Set when the window is being torn down for a reason of its own -- a disk
   // error -- so WM_CLOSE does not stop to ask about the RAM on the way out.
   bool forceClose_ = false;
+  std::function<void()> updateRestart_;
 };
 
 #endif

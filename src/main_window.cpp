@@ -8,6 +8,8 @@
 #include "disk_split.h"
 #include "host_console.h"
 #include "res/resource.h"
+#include "update.h"
+#include "updater.h"
 #include "version.h"
 #include "win/dialog.h"
 
@@ -535,6 +537,8 @@ void MainWindow::RegisterCommands() {
                 MB_OK | MB_ICONINFORMATION);
   });
 
+  OnCommand(ID_HELP_UPDATES, [this] { CheckForUpdates(); });
+
   OnCommand(ID_HELP_ABOUT, [this] {
     AboutDialog dialog(AboutText());
     dialog.ShowModal(hwnd_, IDD_ABOUT);
@@ -773,6 +777,68 @@ void MainWindow::SaveSettings() {
   std::wstring error;
   if (!settings_.Save(error))
     MessageBoxW(hwnd_, error.c_str(), L"Eureka A4", MB_OK | MB_ICONWARNING);
+}
+
+// Asked for by name, so unlike the start-up check it always answers: "máte
+// najnovšiu", the reason it failed, or the offer -- even of a version skipped
+// before, since asking is the user changing their mind.  The machine keeps
+// running on its thread through all of it; only the restart stops it.
+void MainWindow::CheckForUpdates() {
+  const updater::Latest latest = updater::FetchLatestAsked(hwnd_);
+  using Kind = updater::Latest::Kind;
+  if (latest.kind == Kind::kCancelled) return;
+  if (latest.kind == Kind::kFailed) {
+    MessageBoxW(hwnd_, (L"Kontrola aktualizácií sa nepodarila: " + latest.error).c_str(),
+                L"Eureka A4", MB_OK | MB_ICONWARNING);
+    return;
+  }
+  settings_.SetLastUpdateCheck(updater::Today());
+  SaveSettings();
+  const std::wstring current(version::Current());
+  const std::optional<version::Number> number = version::CurrentNumber();
+  if (!number) {
+    // A development build is not offered anything (update.h), but asking
+    // deserves an answer.
+    const std::wstring text =
+        L"Toto je vývojové zostavenie " + current + L" a neaktualizuje sa." +
+        (latest.kind == Kind::kFound
+             ? L"\r\n\r\nPosledné vydanie je " + latest.tag.substr(1) + L"."
+             : std::wstring());
+    MessageBoxW(hwnd_, text.c_str(), L"Eureka A4", MB_OK | MB_ICONINFORMATION);
+    return;
+  }
+  if (latest.kind != Kind::kFound ||
+      !update::ShouldOffer(number, latest.tag, L"")) {
+    MessageBoxW(hwnd_, (L"Máte najnovšiu verziu " + current + L".").c_str(),
+                L"Eureka A4", MB_OK | MB_ICONINFORMATION);
+    return;
+  }
+  switch (updater::AskToUpdate(hwnd_, latest.tag, /*restartsItself=*/false)) {
+    case updater::Choice::kSkip:
+      settings_.SetSkippedVersion(latest.tag.substr(1));
+      SaveSettings();
+      return;
+    case updater::Choice::kLater:
+      return;
+    case updater::Choice::kUpdate:
+      break;
+  }
+  if (updater::DownloadAndInstall(hwnd_, latest.tag, /*restart=*/false) !=
+      updater::Installed::kInstalled)
+    return;
+  // Yes/No and nothing more (owner, 29. 9. 2026).  No takes nothing away:
+  // the new EXE is already in place and the next start is the new version.
+  const std::wstring question =
+      L"Verzia " + latest.tag.substr(1) +
+      L" je pripravená.\r\n\r\nReštartovať emulátor teraz?";
+  if (MessageBoxW(hwnd_, question.c_str(), L"Eureka A4",
+                  MB_YESNO | MB_ICONQUESTION) != IDYES)
+    return;
+  // Run while this window still stands and has the focus, then close without
+  // the RAM question: the restart has just saved it.
+  if (updateRestart_) updateRestart_();
+  forceClose_ = true;
+  PostMessageW(hwnd_, WM_CLOSE, 0, 0);
 }
 
 void MainWindow::SaveSlot(int number, std::wstring value) {

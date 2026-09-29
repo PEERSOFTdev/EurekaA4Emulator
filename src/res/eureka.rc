@@ -138,6 +138,7 @@ BEGIN
     POPUP "&Pomocník"
     BEGIN
         MENUITEM "&Klávesové skratky…\tF11, Ctrl+H",            ID_HELP_KEYS
+        MENUITEM "&Skontrolovať aktualizácie…",                 ID_HELP_UPDATES
         MENUITEM "&O programe…",                                ID_HELP_ABOUT
     END
 END

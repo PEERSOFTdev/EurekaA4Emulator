@@ -35,7 +35,16 @@ Keď novšia verzia je, dialóg ponúkne tri možnosti:
 
 V dialógu je aj odkaz *Čo je nové*, ktorý otvorí stránku vydania.
 
-Kontrola sa vypína v Nastaveniach políčkom **Kontrolovať pri štarte**.
+Kedykoľvek za behu sa dá skontrolovať aj ručne: **Pomocník → Skontrolovať
+aktualizácie**. Tá kontrola čaká, kým GitHub odpovie, dá sa zrušiť a vždy
+povie výsledok — aj to, že máte najnovšiu verziu. Ponúkne aj verziu, ktorú
+ste predtým preskočili. Po stiahnutí sa spýta, či emulátor reštartovať
+teraz. Pri **Áno** uloží disketu aj pamäť — aj keď Eureka nie je vypnutá —
+a nová verzia pokračuje tam, kde ste prestali. Pri **Nie** Eureka beží
+ďalej a nová verzia sa spustí pri ďalšom štarte.
+
+Kontrola pri štarte sa vypína v Nastaveniach políčkom **Kontrolovať pri
+štarte**.
 Ak leží emulátor v priečinku, do ktorého sa nedá zapisovať (napríklad
 `Program Files`), sám sa aktualizovať nevie a ponúkne otvorenie stránky
 s novou verziou.

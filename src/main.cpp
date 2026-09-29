@@ -128,7 +128,7 @@ bool UpdateBeforeStart(Settings& settings) {
   bool restarted = false;
   if (latest.kind == updater::Latest::Kind::kFound &&
       update::ShouldOffer(current, latest.tag, settings.skipped_version())) {
-    switch (updater::AskToUpdate(nullptr, latest.tag)) {
+    switch (updater::AskToUpdate(nullptr, latest.tag, /*restartsItself=*/true)) {
       case updater::Choice::kSkip:
         // Kept as the version, "2026.9.2", not the tag: it is what a person
         // reading the settings file would look for.
@@ -193,6 +193,108 @@ class CommandLine {
   int argc_ = 0;
   wchar_t** argv_ = nullptr;
 };
+
+// The way out: stop the machine, write the diskette and the RAM, and offer to
+// keep the diskettes that have no folder.  A function because two roads take
+// it -- the end of Run, and a restart for an update (ea4-hg9.5), which has to
+// run all of it while the window still stands: the new version is started
+// right after, and Windows lets its window take the focus only if the process
+// starting it has the focus then (updater.cpp, Finish).
+//
+// forUpdate also writes the RAM snapshot when the machine was not switched
+// off.  For the same reason as the console-close rescue: restarting for an
+// update is not a decision about the machine, so the session carries on.
+void ShutDown(EmulatorThread& emulator, const Settings& settings,
+              std::unique_ptr<EurekaMachine>& machine, bool forUpdate) {
+  std::wstring error;
+  // The machine comes back here to be shut down, so nothing below shares it
+  // with a running thread.  Whichever of the two got here first does the
+  // stopping; the other leaves `machine` empty and every step below is already
+  // written to skip on that.
+  if (!shutdownTaken.exchange(true)) machine = emulator.Stop();
+  if (machine && !machine->FlushDisk(error))
+    MessageBoxW(nullptr, (L"Chyba pri ukladaní disku:\r\n\r\n" + error).c_str(),
+                L"Eureka A4", MB_OK | MB_ICONERROR);
+
+  // The RAM snapshot, written after the disk so the two agree.  Only when the
+  // machine was switched off for real -- the cursor-key chord or the idle
+  // timeout -- never on a bare window close: that is the battery cut-off
+  // switch, after which the hardware initialises from scratch (HANDOFF 6.15).
+  // Or for an update restart, see above.
+  if (machine && (machine->powered_off() || forUpdate) && settings.keep_ram()) {
+    const fs::path snapFile = Settings::SnapshotFile();
+    std::wstring snapError;
+    if (snapFile.empty())
+      Warn(L"Stav pamäte sa nedá uložiť: systém nepovedal, kde je priečinok "
+           L"aplikačných dát. Ďalší štart začne inicializáciou.");
+    else if (!machine->SaveSnapshot(snapFile, snapError))
+      Warn(snapError);
+    // Second and separate, so pamat.bin stays what older versions read.
+    // Without the module the file is not touched: see the load above.
+    else if (machine->extra_ram()) {
+      const fs::path extraFile = Settings::ExtraRamSnapshotFile();
+      if (!machine->SaveExtraRamSnapshot(extraFile, snapError)) Warn(snapError);
+    }
+  }
+
+  // Asked about what is actually in the drive now, not about how the run
+  // started: a diskette can be swapped mid-run, so --ram-disk no longer means
+  // there is still an unsaved diskette here -- and one that has a home needs
+  // no offer, it is already on disk.
+  //
+  // This was the one place in the program that already thought in these terms:
+  // it offers a folder that does not exist yet, which is Save As over an
+  // unnamed document, while everything else called the same diskette "v
+  // pamäti" and left it that way.  Now Ctrl+U does the same thing during the
+  // run, and this is only the last chance rather than the only one.
+  if (machine && machine->disk().present() && !machine->disk().has_home() &&
+      machine->disk().StoredFiles() > 0) {
+    const std::wstring question =
+        L"Na neuloženej diskete " + FileCount(machine->disk().StoredFiles()) +
+        L".\r\n\r\nChcete ju uložiť do priečinka?";
+    if (MessageBoxW(nullptr, question.c_str(), L"Eureka A4",
+                    MB_YESNO | MB_ICONQUESTION) == IDYES) {
+      // A name that does not exist yet is the point here: this diskette never
+      // had a folder, so there is nothing to pick.  SaveDiskAs creates it.
+      const std::wstring target = win::PickFolderToCreate(
+          nullptr, L"Kam sa má disketa uložiť", L"Disketa");
+      if (target.empty())
+        Warn(L"Ukladanie zrušené, obsah diskety sa stratí.");
+      else if (!machine->SaveDiskAs(target, error))
+        MessageBoxW(nullptr, (L"Chyba pri ukladaní:\r\n\r\n" + error).c_str(),
+                    L"Eureka A4", MB_OK | MB_ICONERROR);
+      else
+        MessageBoxW(nullptr, (L"Disketa bola uložená do:\r\n\r\n" + target).c_str(),
+                    L"Eureka A4", MB_OK | MB_ICONINFORMATION);
+    }
+  }
+  // The same offer for the diskettes waiting in the quick-choice slots.  They
+  // have no folder and exist nowhere else, so the process ending is the moment
+  // they stop existing -- exactly the silent loss the drive's own diskette is
+  // already protected from.
+  for (int slot = 1; slot <= DiskStash::kSlots; ++slot) {
+    auto kept = emulator.stash().Take(slot);
+    if (!kept || kept->StoredFiles() == 0) continue;
+    const std::wstring question =
+        L"V slote " + std::to_wstring(slot) + L" je neuložená disketa, na "
+        L"ktorej " + FileCount(kept->StoredFiles()) +
+        L".\r\n\r\nChcete ju uložiť do priečinka?";
+    if (MessageBoxW(nullptr, question.c_str(), L"Eureka A4",
+                    MB_YESNO | MB_ICONQUESTION) != IDYES)
+      continue;
+    const std::wstring target = win::PickFolderToCreate(
+        nullptr, L"Kam sa má disketa uložiť",
+        (L"Disketa " + std::to_wstring(slot)).c_str());
+    if (target.empty())
+      Warn(L"Ukladanie zrušené, obsah diskety sa stratí.");
+    else if (!kept->SaveAs(target, error))
+      MessageBoxW(nullptr, (L"Chyba pri ukladaní:\r\n\r\n" + error).c_str(),
+                  L"Eureka A4", MB_OK | MB_ICONERROR);
+    else
+      MessageBoxW(nullptr, (L"Disketa bola uložená do:\r\n\r\n" + target).c_str(),
+                  L"Eureka A4", MB_OK | MB_ICONINFORMATION);
+  }
+}
 
 int Run() {
   CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -518,6 +620,17 @@ int Run() {
       dying->SaveExtraRamSnapshot(Settings::ExtraRamSnapshotFile(), ignored);
   });
 
+  // A manual update check that the user answered with a restart (ea4-hg9.5).
+  // The window calls this before it closes, so the shutdown and the new
+  // version's start both happen while it still has the focus.
+  bool shutDownForUpdate = false;
+  window.SetUpdateRestart([&] {
+    shutDownForUpdate = true;
+    ShutDown(emulator, settings, machine, /*forUpdate=*/true);
+    std::wstring restartError;
+    if (!updater::Restart(restartError)) Warn(restartError);
+  });
+
   win::RunMessageLoop(window.handle(), window.accelerators(),
                       window.hostAccelerators(),
                       [&window] { return window.HostShortcutsActive(); });
@@ -531,92 +644,8 @@ int Run() {
   // window's, and the process is being killed either way.
   host::SetCloseRescue(nullptr);
 
-  // The machine comes back here to be shut down, so nothing below shares it
-  // with a running thread.  Whichever of the two got here first does the
-  // stopping; the other leaves `machine` empty and every step below is already
-  // written to skip on that.
-  if (!shutdownTaken.exchange(true)) machine = emulator.Stop();
-  if (machine && !machine->FlushDisk(error))
-    MessageBoxW(nullptr, (L"Chyba pri ukladaní disku:\r\n\r\n" + error).c_str(),
-                L"Eureka A4", MB_OK | MB_ICONERROR);
-
-  // The RAM snapshot, written after the disk so the two agree.  Only when the
-  // machine was switched off for real -- the cursor-key chord or the idle
-  // timeout -- never on a bare window close: that is the battery cut-off
-  // switch, after which the hardware initialises from scratch (HANDOFF 6.15).
-  if (machine && machine->powered_off() && settings.keep_ram()) {
-    const fs::path snapFile = Settings::SnapshotFile();
-    std::wstring snapError;
-    if (snapFile.empty())
-      Warn(L"Stav pamäte sa nedá uložiť: systém nepovedal, kde je priečinok "
-           L"aplikačných dát. Ďalší štart začne inicializáciou.");
-    else if (!machine->SaveSnapshot(snapFile, snapError))
-      Warn(snapError);
-    // Second and separate, so pamat.bin stays what older versions read.
-    // Without the module the file is not touched: see the load above.
-    else if (machine->extra_ram()) {
-      const fs::path extraFile = Settings::ExtraRamSnapshotFile();
-      if (!machine->SaveExtraRamSnapshot(extraFile, snapError)) Warn(snapError);
-    }
-  }
-
-  // Asked about what is actually in the drive now, not about how the run
-  // started: a diskette can be swapped mid-run, so --ram-disk no longer means
-  // there is still an unsaved diskette here -- and one that has a home needs
-  // no offer, it is already on disk.
-  //
-  // This was the one place in the program that already thought in these terms:
-  // it offers a folder that does not exist yet, which is Save As over an
-  // unnamed document, while everything else called the same diskette "v
-  // pamäti" and left it that way.  Now Ctrl+U does the same thing during the
-  // run, and this is only the last chance rather than the only one.
-  if (machine && machine->disk().present() && !machine->disk().has_home() &&
-      machine->disk().StoredFiles() > 0) {
-    const std::wstring question =
-        L"Na neuloženej diskete " + FileCount(machine->disk().StoredFiles()) +
-        L".\r\n\r\nChcete ju uložiť do priečinka?";
-    if (MessageBoxW(nullptr, question.c_str(), L"Eureka A4",
-                    MB_YESNO | MB_ICONQUESTION) == IDYES) {
-      // A name that does not exist yet is the point here: this diskette never
-      // had a folder, so there is nothing to pick.  SaveDiskAs creates it.
-      const std::wstring target = win::PickFolderToCreate(
-          nullptr, L"Kam sa má disketa uložiť", L"Disketa");
-      if (target.empty())
-        Warn(L"Ukladanie zrušené, obsah diskety sa stratí.");
-      else if (!machine->SaveDiskAs(target, error))
-        MessageBoxW(nullptr, (L"Chyba pri ukladaní:\r\n\r\n" + error).c_str(),
-                    L"Eureka A4", MB_OK | MB_ICONERROR);
-      else
-        MessageBoxW(nullptr, (L"Disketa bola uložená do:\r\n\r\n" + target).c_str(),
-                    L"Eureka A4", MB_OK | MB_ICONINFORMATION);
-    }
-  }
-  // The same offer for the diskettes waiting in the quick-choice slots.  They
-  // have no folder and exist nowhere else, so the process ending is the moment
-  // they stop existing -- exactly the silent loss the drive's own diskette is
-  // already protected from.
-  for (int slot = 1; slot <= DiskStash::kSlots; ++slot) {
-    auto kept = emulator.stash().Take(slot);
-    if (!kept || kept->StoredFiles() == 0) continue;
-    const std::wstring question =
-        L"V slote " + std::to_wstring(slot) + L" je neuložená disketa, na "
-        L"ktorej " + FileCount(kept->StoredFiles()) +
-        L".\r\n\r\nChcete ju uložiť do priečinka?";
-    if (MessageBoxW(nullptr, question.c_str(), L"Eureka A4",
-                    MB_YESNO | MB_ICONQUESTION) != IDYES)
-      continue;
-    const std::wstring target = win::PickFolderToCreate(
-        nullptr, L"Kam sa má disketa uložiť",
-        (L"Disketa " + std::to_wstring(slot)).c_str());
-    if (target.empty())
-      Warn(L"Ukladanie zrušené, obsah diskety sa stratí.");
-    else if (!kept->SaveAs(target, error))
-      MessageBoxW(nullptr, (L"Chyba pri ukladaní:\r\n\r\n" + error).c_str(),
-                  L"Eureka A4", MB_OK | MB_ICONERROR);
-    else
-      MessageBoxW(nullptr, (L"Disketa bola uložená do:\r\n\r\n" + target).c_str(),
-                  L"Eureka A4", MB_OK | MB_ICONINFORMATION);
-  }
+  // Once only: a second run would ask about the unsaved diskettes again.
+  if (!shutDownForUpdate) ShutDown(emulator, settings, machine, false);
 
   if (machine && machine->diagnostics().enabled()) {
     host::Print(machine->diagnostics().Report());

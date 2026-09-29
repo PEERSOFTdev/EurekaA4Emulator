@@ -59,6 +59,7 @@
 #define ID_TOOLS_DIAGDUMP    40031
 #define ID_HELP_KEYS         40040
 #define ID_HELP_ABOUT        40041
+#define ID_HELP_UPDATES      40042
 // Not a menu item: the accelerator that opens the menu bar, because Alt and
 // F10 both belong to the guest.
 #define ID_ACTIVATE_MENU     40050

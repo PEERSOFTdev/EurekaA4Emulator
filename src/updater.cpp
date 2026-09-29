@@ -442,7 +442,48 @@ Latest FetchLatestWithin(DWORD milliseconds) {
   return future.get();
 }
 
-Choice AskToUpdate(HWND owner, const std::wstring& tag) {
+Latest FetchLatestAsked(HWND owner) {
+  // Shared with the worker, which may outlive the dialog if the user cancels.
+  struct Asked {
+    std::atomic<bool> finished{false};
+    Latest latest;  // written before `finished`
+  };
+  auto job = std::make_shared<Asked>();
+  std::thread([job] {
+    job->latest = FetchLatest(0);
+    job->finished = true;
+  }).detach();
+
+  TASKDIALOGCONFIG config = {};
+  config.cbSize = sizeof(config);
+  config.hwndParent = owner;
+  config.dwFlags = TDF_SHOW_MARQUEE_PROGRESS_BAR | TDF_CALLBACK_TIMER |
+                   TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
+  config.dwCommonButtons = TDCBF_CANCEL_BUTTON;
+  config.pszWindowTitle = L"Eureka A4";
+  config.pszMainInstruction = L"Zisťujem, či je k dispozícii novšia verzia…";
+  config.lpCallbackData = reinterpret_cast<LONG_PTR>(job.get());
+  config.pfCallback = [](HWND dialog, UINT notification, WPARAM, LPARAM,
+                         LONG_PTR data) -> HRESULT {
+    auto* asked = reinterpret_cast<Asked*>(data);
+    if (notification == TDN_CREATED)
+      SendMessageW(dialog, TDM_SET_PROGRESS_BAR_MARQUEE, TRUE, 0);
+    if (notification == TDN_TIMER && asked->finished)
+      SendMessageW(dialog, TDM_CLICK_BUTTON, IDCANCEL, 0);
+    return S_OK;
+  };
+  TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
+  // The button that closes it is the same either way; what tells the two
+  // apart is whether the answer was in.
+  if (!job->finished) {
+    Latest cancelled;
+    cancelled.kind = Latest::Kind::kCancelled;
+    return cancelled;
+  }
+  return job->latest;
+}
+
+Choice AskToUpdate(HWND owner, const std::wstring& tag, bool restartsItself) {
   constexpr int kUpdate = 100;
   constexpr int kLater = 101;
   constexpr int kSkip = 102;
@@ -453,8 +494,8 @@ Choice AskToUpdate(HWND owner, const std::wstring& tag) {
   };
   const std::wstring instruction = L"Je k dispozícii verzia " + Bare(tag) + L".";
   const std::wstring content =
-      L"Máte verziu " + std::wstring(version::Current()) +
-      L". Po aktualizácii sa emulátor spustí znova.";
+      L"Máte verziu " + std::wstring(version::Current()) + L"." +
+      (restartsItself ? L" Po aktualizácii sa emulátor spustí znova." : L"");
   std::wstring page = update::kReleasePage;
   page.resize(page.size() - std::wcslen(L"latest"));
   const std::wstring footer = L"<a href=\"" + page + L"tag/" + tag +
