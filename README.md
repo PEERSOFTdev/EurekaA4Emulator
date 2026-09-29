@@ -838,6 +838,19 @@ Zostaviť sa dá dvoma cestami: natívne vo Windows cez msys2, alebo krížovo
 z Linuxu a z WSL. Obe používajú ten istý `Makefile` a tie isté prepínače,
 takže sa líšia len tým, ktorý prekladač sa zavolá.
 
+### Verzia vlastného zostavenia
+
+Verziu určuje značka v gite. Značky vydaní vytvára GitHub pri vydaní, takže
+do vlastného klonu ich treba stiahnuť: `git fetch --tags`, prípadne ich
+prinesie `git pull`. Bez nich vyjde verzia `0.0.0-` s hashom commitu.
+
+Číslo vydania, napríklad `2026.9.1`, dostane zostavenie len na presne tom
+commite, ktorý bol vydaný. Každé iné je vývojové a verzia to hovorí:
+`2026.9.1-3-g61ba163` sú tri commity po 2026.9.1, a `-dirty` na konci
+znamená neuložené zmeny. Vývojové zostavenie sa na aktualizácie nepýta,
+inak by ponúklo vymeniť sa za vydanie, ktoré je staršie než strom, z ktorého
+vzniklo.
+
 ### Windows
 
 Vyžaduje **mingw64 z msys2** (balík `mingw-w64-x86_64-gcc`). Predvolene sa
