@@ -78,7 +78,7 @@ endif
 EMU_NAMES  := main machine md5 virtual_disk cpm_disk disk_stash disk_layout \
               disk_split text_codec audio_player \
               diagnostics host_console emulator_thread main_window dialogs \
-              settings version update
+              settings version update updater
 # Nezavisle na emulatore, da sa vziat do ineho projektu tak ako je.
 WIN_NAMES  := window dialog
 EMU_OBJS   := $(addprefix $(BUILD)/,$(addsuffix .o,$(EMU_NAMES))) \
@@ -151,9 +151,12 @@ $(BUILD)/eureka_res.o: src/res/eureka.rc src/res/resource.h \
 # neodkazuje -- to druhe funguje len vdaka $(SECTIONS) pri preklade.
 # Obe su len na emulatore: testy a sonda si symboly nechavaju, lebo ked
 # spadnu, chce sa vediet kde.
+#
+# winhttp a bcrypt su pre aktualizacie (updater.cpp): spojenie s GitHubom
+# a SHA-256 stiahnuteho EXE. Obe su sucastou Windows, nic navyse sa nenosi.
 $(EMU): $(EMU_OBJS) | $(BIN)
 	$(CXX) -municode -mwindows $(STATIC) -Wl,--gc-sections -s -o $@ \
-	    $(EMU_OBJS) -lwinmm -lole32 -lshell32 -luuid -lcomctl32
+	    $(EMU_OBJS) -lwinmm -lole32 -lshell32 -luuid -lcomctl32 -lwinhttp -lbcrypt
 
 # codec_test a disk_test maju obycajny main, preto bez -municode; s nim
 # linker spadne na chybajucom wWinMain.

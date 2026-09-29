@@ -658,6 +658,25 @@ lebo NVDA považuje doplnky za odvodené dielo (`nvda-addon/COPYING.txt`).
   meraním, nie čítaním: šablónu z hotového EXE vyrobí
   `CreateDialogIndirectParamW` skrytú a `IsDialogMessageW` prijme ručne
   poskladaný `WM_KEYDOWN`, takže na to netreba obrazovku.
+- **Aktualizácie sú dve vrstvy** (epic `ea4-hg9`). `src/update.*` sú
+  pravidlá bez siete a bez Windows (čo je značka, čo ponúknuť) a drží ich
+  `update_test`. `src/updater.*` je WinHTTP, SHA-256 cez BCrypt, výmena EXE
+  a dva TaskDialogy; test na to nie je, overené sondou mimo repozitára proti
+  skutočnému vydaniu `v2026.9.1` (29. 9. 2026): stiahnuté EXE súhlasí so
+  `SHA256SUMS.txt`, bežiaci súbor sa odsunie na `.old` a `.new` nezostane.
+  Kontrola beží v `main.cpp` **pred** ROM, disketou aj strojom — preto
+  aktualizácia nič neukladá. Automatická má strop tri sekundy aj s DNS
+  (`FetchLatestWithin`, WinHTTP sám DNS neobmedzí); ručná strop nemá
+  (rozhodnutie majiteľa). Pasca: **`TaskDialogIndirect` je len v Common
+  Controls 6**, takže program bez manifestu, ktorý ho linkuje, sa **vôbec
+  nenačíta** — v bashi skončí kódom 127 bez jediného slova. Emulátor manifest
+  má; sonda alebo test, ktorý linkuje `updater.o`, ho potrebuje tiež.
+  Druhá pasca, nájdená skúškou majiteľa: **novú verziu treba spustiť, kým je
+  dialóg sťahovania otvorený.** Windows pustí okno dopredu len vtedy, keď ho
+  spustil proces, ktorý mal práve fokus; spustená až po zavretí dialógu
+  naštartovala za terminálom a hľadala sa Alt+Tabom. Preto overenie, výmena aj
+  štart bežia v `Finish` na časovači dialógu, a `main.cpp` si pri štarte fokus
+  vypýta aj výslovne (`SetForegroundWindow`).
 - Súradnice sa nepočítajú nikde. Rozloženie dialógov je v dialógových
   jednotkách v `.rc` a škáluje sa s fontom. Ak by niektorý dialóg pýtal
   layout engine, je príliš zložitý na dialóg.

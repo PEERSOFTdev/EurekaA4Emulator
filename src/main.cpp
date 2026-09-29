@@ -28,6 +28,8 @@
 #include "machine.h"
 #include "main_window.h"
 #include "settings.h"
+#include "update.h"
+#include "updater.h"
 #include "version.h"
 #include "win/dialog.h"
 #include "win/window.h"
@@ -93,6 +95,58 @@ int Fail(const std::wstring& message) {
 void Warn(const std::wstring& message) {
   MessageBoxW(nullptr, message.c_str(), L"Eureka A4", MB_OK | MB_ICONWARNING);
   host::Print(L"Upozornenie: " + message + L"\r\n");
+}
+
+// The automatic update check (ea4-hg9.4).  Before the ROM, the diskette and
+// the machine, so taking an update is only swapping the EXE: nothing runs yet,
+// no RAM or diskette needs saving -- the snapshot of the last power-down is
+// already on disk and the new version resumes from it.
+//
+// Capped at three seconds, DNS included, so a slow or missing network costs
+// the start that and no more; a failure says nothing and is tried again next
+// start.  A check the user asks for is not capped (ea4-hg9.5).  At most once
+// a day, and only a release build asks: a development build has no number to
+// compare and must not replace itself with a published EXE.
+//
+// True when the new version has been started and this one should just leave.
+bool UpdateBeforeStart(Settings& settings) {
+  if (!settings.check_updates()) return false;
+  const std::optional<version::Number> current = version::CurrentNumber();
+  if (!current) return false;
+  const std::wstring today = updater::Today();
+  if (!update::CheckDue(settings.last_update_check(), today)) return false;
+
+  const updater::Latest latest = updater::FetchLatestWithin(3000);
+  if (latest.kind == updater::Latest::Kind::kFailed) return false;
+  // Saved now, before any restart: the new version starts while this one is
+  // still here, and must find today's date and not ask again.  Not reported
+  // when it fails -- nothing the user did is lost, only the date, and the cost
+  // is one more check tomorrow.
+  std::wstring ignored;
+  settings.SetLastUpdateCheck(today);
+  settings.Save(ignored);
+  bool restarted = false;
+  if (latest.kind == updater::Latest::Kind::kFound &&
+      update::ShouldOffer(current, latest.tag, settings.skipped_version())) {
+    switch (updater::AskToUpdate(nullptr, latest.tag)) {
+      case updater::Choice::kSkip:
+        // Kept as the version, "2026.9.2", not the tag: it is what a person
+        // reading the settings file would look for.
+        settings.SetSkippedVersion(
+            latest.tag.substr(latest.tag.starts_with(L'v') ? 1 : 0));
+        settings.Save(ignored);
+        break;
+      case updater::Choice::kLater:
+        break;
+      case updater::Choice::kUpdate:
+        // A failure has been said by the updater; the start then goes on
+        // with this version.
+        restarted = updater::DownloadAndInstall(nullptr, latest.tag, true) ==
+                    updater::Installed::kRestarted;
+        break;
+    }
+  }
+  return restarted;
 }
 
 void PrintUsage() {
@@ -223,6 +277,11 @@ int Run() {
   if (diagnostics) host::OpenConsole();
   Settings settings(Settings::FindFile());
   settings.Load();
+  updater::RemoveLeftover();
+  if (UpdateBeforeStart(settings)) {
+    CoUninitialize();
+    return 0;
+  }
   // The keyboard the last run ended on.  Silent on purpose: the tone belongs to
   // a change, and a start is not one -- the title says which keyboard this is
   // for any moment afterwards, so NVDA+T answers it (ea4-0vw).
@@ -420,6 +479,11 @@ int Run() {
   for (int slot = 1; slot <= Settings::kSlots; ++slot)
     if (SlotIsUnsaved(settings.slot(slot))) emulator.PostEnsureSlotDiskette(slot);
   window.Show(SW_SHOW);
+  // Asked for outright, because after an update this window is started by a
+  // process that is leaving (updater.cpp, Finish), and ShowWindow alone left
+  // it behind the terminal.  Windows grants it only where it is allowed --
+  // started by whoever had the focus -- so an ordinary start is unchanged.
+  SetForegroundWindow(window.handle());
   SetFocus(window.handle());
 
   // Closing the diagnostic console kills this process outright -- it cannot be

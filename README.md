@@ -18,6 +18,28 @@ Súbor `SHA256SUMS.txt` obsahuje ich kontrolné súčty.
 Verzia má tvar rok.mesiac.poradie, napríklad `2026.9.1` je prvé vydanie
 v septembri 2026.
 
+## Aktualizácie
+
+Pri štarte sa emulátor najviac raz za deň spýta GitHubu, či je k dispozícii
+novšia verzia. Pýta sa ešte skôr, než Eureka nabehne, a čaká najviac tri
+sekundy; bez internetu sa nestane nič a skúsi to pri ďalšom štarte.
+
+Keď novšia verzia je, dialóg ponúkne tri možnosti:
+
+- **Aktualizovať** — stiahne nový emulátor, overí jeho kontrolný súčet,
+  vymení ho za doterajší a spustí ho znova s tými istými parametrami. Eureka
+  pritom ešte nebeží, takže sa nič neukladá ani nestráca; pamäť z posledného
+  vypnutia si nová verzia načíta tak ako vždy.
+- **Neskôr** — spýta sa zase na druhý deň.
+- **Preskočiť túto verziu** — na túto verziu sa už nespýta, na ďalšiu áno.
+
+V dialógu je aj odkaz *Čo je nové*, ktorý otvorí stránku vydania.
+
+Kontrola sa vypína v Nastaveniach políčkom **Kontrolovať pri štarte**.
+Ak leží emulátor v priečinku, do ktorého sa nedá zapisovať (napríklad
+`Program Files`), sám sa aktualizovať nevie a ponúkne otvorenie stránky
+s novou verziou.
+
 ## ROM si musíte dodať sami
 
 **Bez ROM emulátor nenabehne, a v tomto repozitári ani v žiadnom vydaní
