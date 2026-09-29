@@ -824,6 +824,48 @@ oznamovací tón pred vytáčaním (6.49) — sedí to s `dcd0_mask`. Pre `18F99
 a `18FB1` to overené nie je. Bit teraz vie ísť do nuly na požiadanie
 (Stroj → Telefónna linka); bez nej zostáva v jednotke ako doteraz.
 
+**Doplnené 29. 9. 2026: tlač bit 5 nečíta, odvodenie „pripravenosť
+tlačiarne“ bolo nesprávne.** Odmerané sondou na tlači z textového
+procesora (Shift+F1, text, Shift+F1, `p`, `y`, `n` — postup majiteľa;
+v sonde `kD0 ahoj~ kD0 p . y . n`), s dočasnou inštrumentáciou portov
+v kópii mimo repozitára (`C:\b\ea4-serial-scratch`, `PROGRESS.md`):
+
+- Tlačový výstup je slučka na `19AF6` s `DE=07D0h` pokusmi. Pred každým
+  bajtom sa pýta na pripravenosť cez `19B75` a tabuľku zariadení na
+  `19BF5`; pri nepripravenej tlačiarni volá `E2EC` s `B=5` (odmerané
+  31 565 až 32 448 cyklov, asi 5,2 ms). 2000 × 5,2 ms = **10,4 s**, čo sedí
+  so stopkami majiteľa, a potom príde „tiskárna není připravena, nové
+  spuštění mezerníkem“. `19CD9` je len oneskorenie vnútri `E2EC`.
+- Test pripravenosti kanála ASCI1 je `184F2` (logicky `D4F2`): bit 1
+  v `C595` je nula (nastavuje ho prijatý XOFF), STAT1 má TDRE a
+  **`A8h` bit 2 (`cts1_mask`) je nula**. Bit 5 sa v tejto ceste nečíta.
+- Keď sonda hlási CTS1 aktívne, tlač dobehne („tisk ukončen“) a do TDR1
+  (`OUT0` na `184E2`) ide 174 bajtov, do TDR0 nič. **Tlačiareň je na
+  ASCI1.** Tabuľka odosielacích rutín na `19BC5`: `D446` pre ASCI0,
+  `D4C2` pre ASCI1.
+- Prúd je čistý text celej strany: tri prázdne riadky, osem medzier okraja,
+  text, CR LF až po koniec strany (60 párov), číslo strany v strede a `0Ch`.
+  **Ani jeden ESC.** Diakritika v ňom overená nie je — text bol „ahoj“.
+- Odosiela sa ankovaním, bez prerušení (348 čítaní STAT1 na 174 bajtov).
+  Po každom bajte sa číta CNTLB1 a pri `(CNTLB1 & 0Fh) == 06h` pribudne
+  oneskorenie s `B=12h`; prečo, nie je určené.
+- Nastavenie z bootu (`18390`–`183C4`), počas tlače sa nemení: CNTLA1 =
+  `64h`, CNTLB1 = `12h`, STAT1 = `08h` (RIE, CTS1E vypnuté — CTS teda nejde
+  do ASCI, ROM ho číta cez `A8h`). Pri φ = 6,144 MHz je to **9600 Bd, 8N1**.
+  Hodnoty idú z `C4DE` (index rýchlosti `06h`), `C4DF` (formát `0Ch`)
+  a `C4E0` → `C597` (XON/XOFF, predvolene vypnuté).
+- Výpadok CTS uprostred tlače: na asi sekundu tlač počká a pokračuje;
+  dlhší dá hlášku a medzerník (scancode `s39`) tlač obnoví od miesta, kde
+  stála — 174 bajtov spolu, nič stratené ani zdvojené.
+
+Emulátor dnes hlási CTS1 neaktívne, takže hláška „není připravena“ je
+**správna odpoveď** stroja bez tlačiarne. Otvorené zostáva, čo bit 5 robí
+na `18F99` a `18FB1`, a tri drobnosti z merania: prečo `k20` po hláške tlač
+neobnovil, kým `s39` áno; čo na skutočnom stroji robia zápisy
+`OUT (05h),A` na `184DF` a `OUT (04h),A` na `18457` (s `A=09h` v hornom
+bajte adresy to nie je interný STAT, emulátor ich zahodí); a úplné
+mapovanie indexov rýchlosti v `D411`. Práca na modeli: epic `ea4-7zw`.
+
 ### 6.4 Bity latchov, ktoré sa nikdy nezmenili
 
 Počas prechodu aplikáciami zostali nedotknuté `B0` bit 0 (`fdc_side`)
@@ -842,6 +884,15 @@ plnšej diskety, a niečo ju prepnúť malo. Model stranu vie
 skôr **cesta ovládača v ROM**: `InterceptBios` ju obchádza, takže kód,
 ktorý stranu prepína, takmer nebeží. Overiť sa to dá technikou z 6.30 —
 vypnúť obídenie BIOS-u a nechať bežať pôvodný ovládač.
+
+**Doplnené 29. 9. 2026: `rts1_mask` sa nezmenil ani pri tlači, a je to
+správne.** RTS je aktívne v nule, zostáva v nule celý čas a tlač ho
+nepoužíva (6.3). Zdvíha ho len príjem: obsluha prerušenia od prijatých dát
+na `18582` ho nastaví (zápis na `1860D`), keď je v prijímacom bufferi aspoň `7Ch`
+bajtov a XON/XOFF je vypnuté, a na `1856D` ho vráti. Pri zapnutom XON/XOFF
+(`C597` bit 0) prijaté `13h` a `11h` namiesto toho menia bit 1 v `C595`.
+Bit sa teda pohne až vtedy, keď bude na kanáli 1 niečo, čo vysiela
+(epic `ea4-7zw`).
 
 ### 6.5 Formátovanie nemaže hostiteľský priečinok
 
@@ -3960,6 +4011,10 @@ skutočný posuvník rýchlosti (6.34, Otvorené).
    cestu adresára disku.
 9. **Sériová relácia** — odblokuje `B0h` bit 7, `A8h` bity 2 a 5 a
     rozhodne otázku 6.3.
+    **Čiastočne hotové 29. 9. 2026:** tlač je odmeraná a otázka 6.3 pre ňu
+    rozhodnutá — pripravenosť je `A8h` bit 2, tlačiareň je na ASCI1 a bit 7
+    `B0h` pri tlači stojí správne (6.3, 6.4). Bit 5 zostáva otvorený.
+    Pokračuje sa modelom kanála 1, epic `ea4-7zw`.
 
 ### Čím sa dá testovať
 

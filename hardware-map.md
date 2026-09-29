@@ -361,7 +361,7 @@ overené — obsluha príkazu zatiaľ nie je nájdená.
 
 | bit | názov | význam |
 |---|---|---|
-| 7 | `rts1_mask` | RTS na RS-232; nastavuje sa po `BIT 0,C` na 1860D a 1E0B3, nuluje po `IN0 A,(RDR1)` na 183BA |
+| 7 | `rts1_mask` | RTS na RS-232, aktívne v nule; nastavuje sa po `BIT 0,C` na 1860D a 1E0B3, nuluje po `IN0 A,(RDR1)` na 183BA. Pri tlači sa nehýbe, zdvíha ho len plný prijímací buffer (HANDOFF 6.4) |
 | 6 | `vmsel_mask` | výber dvojice komparátorov: 0 = vnútorný teplomer + externý voltmeter, 1 = potenciometer rýchlosti reči + **batéria** |
 | 5 | `dtmf_mask` | 0 pripojí DAC na telefónnu linku (tónová voľba), 1 pripojí modem |
 | 4 | `filtersel_mask` | medzná frekvencia filtra zvukového obvodu; 1 = normálna, 0 = vysoká. Ovláda ho rečový engine |
@@ -436,7 +436,7 @@ konzolový.
 | 7, 6 | — | nepoužité |
 | 5 | `dcd0_mask` | aktívne v nule; detekcia nosnej z modemu AM7910. Pollované s počítadlom pokusov na 18F99, 18FB1, 19097; na 19097 je to čakanie na oznamovací tón pred vytáčaním (HANDOFF 6.49) |
 | 3 | `ring_mask` | aktívne v nule; prítomnosť vyzváňacieho napätia (automatické zdvihnutie) |
-| 2 | `cts1_mask` | aktívne v nule; CTS na RS-232 |
+| 2 | `cts1_mask` | aktívne v nule; CTS na RS-232. **Pripravenosť tlačiarne**: test ASCI1 na `184F2` (`IN A,(A8h)` / `AND 04h`), HANDOFF 6.3 |
 | 1 | `vm2_mask` | druhý komparátor: podľa `vmsel` externý voltmeter alebo **napätie batérie** |
 | 0 | `vm1_mask` | prvý komparátor: podľa `vmsel` vnútorný teplomer alebo potenciometer rýchlosti reči |
 
@@ -467,6 +467,11 @@ nastavený bit 1 znamená *vybitú batériu*, nie pripravenosť radiča. Na
 Poznámka: bit 5 je podľa manuálu DCD z modemu, ale táto ROM ho pollne
 aj v ceste tlačového výstupu. Buď je to v českej verzii inak zapojené,
 alebo je odvodenie „pripravenosť tlačiarne" nepresné. Otvorené.
+
+**Uzavreté 29. 9. 2026 (HANDOFF 6.3):** odvodenie bolo nepresné. Tlač
+z textového procesora bit 5 nečíta vôbec; o pripravenosti tlačiarne
+rozhoduje bit 2, `cts1_mask`, na `184F2`. Čo robí bit 5 na 18F99 a
+18FB1, zostáva neurčené.
 
 ## Hodiny reálneho času
 
