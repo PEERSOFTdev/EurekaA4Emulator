@@ -6,10 +6,12 @@
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "diagnostics.h"
+#include "serial_link.h"
 #include "sliders.h"
 #include "virtual_disk.h"
 
@@ -313,6 +315,12 @@ class EurekaMachine {
   // line off hook, gets past the wait as well (HANDOFF 6.49).  Neither Reset
   // nor PowerOn touches it: it is the socket, not the machine.
   void SetPhoneLine(bool connected) { phoneLine_ = connected; }
+  // Plugs a cable into the RS-232 socket, or pulls it out with nullptr.  The
+  // machine does not own it.  Without one CTS stays deasserted, which is the
+  // right answer for a machine with nothing attached: "tiskarna neni
+  // pripravena", "neni odezva".  Neither Reset nor PowerOn touches it: it is
+  // the socket, not the machine.
+  void SetSerialLink(SerialLink* link);
 
   uint8_t debug_peek(uint16_t address) const { return Peek(address); }
   // The alarm the firmware last armed: registers 190h-197h in port order, the
@@ -437,6 +445,12 @@ class EurekaMachine {
   void UpdateRtcEvents();
   uint8_t ReadInputBuffer() const;
   void PumpCsio();
+  uint32_t Asci1BitCycles() const;
+  uint32_t Asci1CharacterCycles() const;
+  uint8_t Asci1DataMask() const;
+  uint8_t ReadAsci1Status() const;
+  bool Asci1Interrupt() const;
+  void PumpAsci1();
   uint8_t ReadMembraneKeyboard(uint8_t port);
   void PressMembraneKey(uint8_t key);
   bool MembraneBusy() const;
@@ -582,6 +596,17 @@ class EurekaMachine {
   uint8_t csioData_ = 0;
   bool csioPending_ = false;
   uint64_t csioReadyAt_ = 0;
+  // ASCI channel 1, the RS-232 socket.  The transmitter is double buffered as
+  // on the chip: TDR holds what was written, the shift register what is going
+  // out, and TDRE reads set while TDR is free.  Channel 0 (the modem) is still
+  // only the idle status the ROM needs to boot.
+  SerialLink* serialLink_ = nullptr;
+  std::optional<uint8_t> asci1Tdr_;
+  std::optional<uint8_t> asci1Shift_;
+  uint64_t asci1ShiftDoneAt_ = 0;
+  uint8_t asci1Rdr_ = 0;
+  bool asci1Rdrf_ = false;
+  uint64_t asci1RxReadyAt_ = 0;
   // The keyboard the ROM expects, worked out from its own tables: for each
   // character of the machine's charset, the scan code that types it and the
   // modifier that has to be held down.  code 0 means the character is not on

@@ -786,9 +786,15 @@ neprepísal obsah pripojeného obrazu.
 - RTC, napäťové komparátory, napájacie a výstupné registre;
 - 8-bitový DAC s rekonštrukčným filtrom, pôvodný syntetizátor, hudba
   a zvuky cez Windows `waveOut`;
-- základné stavové registre ASCI a CSI/O potrebné na štart ROM.
+- sériový port RS-232 (kanál ASCI 1), cez ktorý Eureka tlačí a Komunikácia
+  posiela a prijíma súbory: rýchlosť a formát podľa nastavenia v stroji,
+  signály RTS a CTS, prerušenie od prijatého znaku;
+- stavové registre modemového kanála ASCI 0 potrebné na štart ROM.
 
-Externý modem, telefónna linka a fyzický sériový kábel zatiaľ nemajú most na
+Sériový port zatiaľ nemá do čoho zapojiť kábel: v okne nie je ani tlačiareň,
+ani spojenie s druhým emulátorom, takže tlač povie „tiskárna není
+připravena“ a Komunikácia „není odezva“ — presne ako skutočná Eureka, za
+ktorou nič nevisí. Externý modem a telefónna linka tiež nemajú most na
 zariadenia Windows; ich vstupy zostávajú v bezpečnom pokojovom stave. Jedinou
 výnimkou je vymyslená linka z ponuky Stroj (viď Telefónna linka), ktorá hlási
 oznamovací tón. Formátovanie

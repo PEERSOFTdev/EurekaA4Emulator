@@ -1,12 +1,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <ctime>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -2624,6 +2627,227 @@ bool CheckSession(EurekaMachine& machine) {
   return passed;
 }
 
+// One end of an RS-232 cable in memory.  Two of them joined by `peer` are a
+// null-modem cable between two machines, each end's RTS arriving on the
+// other's CTS; one alone is a printer whose readiness the test decides.  Every
+// character sent is kept with the cycle it left at, so the pacing can be
+// checked as well as the bytes.
+class CableEnd : public SerialLink {
+ public:
+  explicit CableEnd(const EurekaMachine& clock) : clock_(clock) {}
+
+  CableEnd* peer = nullptr;
+  // Without a peer: whether the printer holds CTS, and from which cycle on.
+  bool ready = true;
+  uint64_t readyFrom = 0;
+  bool rts = false;
+  std::deque<uint8_t> inbox;
+  std::vector<uint8_t> sent;
+  std::vector<uint64_t> sentAt;
+
+  bool ClearToSend() override {
+    if (peer != nullptr) return peer->rts;
+    return ready && clock_.cycles() >= readyFrom;
+  }
+  void SetRequestToSend(bool asserted) override { rts = asserted; }
+  void Transmit(uint8_t character) override {
+    sent.push_back(character);
+    sentAt.push_back(clock_.cycles());
+    if (peer != nullptr) peer->inbox.push_back(character);
+  }
+  std::optional<uint8_t> Receive() override {
+    if (inbox.empty()) return std::nullopt;
+    const uint8_t character = inbox.front();
+    inbox.pop_front();
+    return character;
+  }
+
+ private:
+  const EurekaMachine& clock_;
+};
+
+// Shift+F1, a word, Shift+F1, P, Y, N: the owner's way to print from the word
+// processor (HANDOFF 6.3).  The answers go through Type, not Press -- a code
+// queued ready-made is not taken at these prompts (ea4-7zw.5).
+void StartPrinting(eureka::Session& eureka) {
+  using namespace eureka;
+  eureka.Press(keys::Shift | keys::F1);
+  eureka.WaitSaid("textový procesor");
+  eureka.Type("ahoj\r");
+  eureka.WaitIdle();
+  eureka.Press(keys::Shift | keys::F1);
+  eureka.WaitSaid("souborový příkaz");
+  eureka.Type("p");
+  eureka.WaitSaid("vytisknout");
+  eureka.Type("y");
+  eureka.WaitSaid("strany");
+  eureka.Type("n");
+}
+
+// Printing over ASCI1 (HANDOFF 6.3).  Three things at once, because they share
+// the setup: with nothing in the socket the machine gives up after ten
+// seconds; with a printer the whole page arrives, one character per character
+// time at 9600 Bd 8N1; and a printer that drops CTS for a second part way
+// through gets the page whole, nothing lost and nothing twice.
+bool CheckPrinter(EurekaMachine& machine) {
+  using namespace eureka;
+  Session eureka(machine);
+  bool passed = true;
+  const auto expect = [&](bool ok, const std::string& what) {
+    if (!ok) std::cout << "  " << what << "\n";
+    passed = passed && ok;
+  };
+  // 10 bits of 640 cycles each, CNTLB1 = 12h from the boot (18390).
+  constexpr uint64_t kCharacterCycles = 6400;
+  // The page the measurement saw: three blank lines, an eight-space margin,
+  // the word, CR LF down to the foot, the page number and a form feed.
+  const std::string head = "\r\n\r\n\r\n        ahoj\r\n";
+  try {
+    eureka.Reset();
+    eureka.WaitIdle(10s);
+    StartPrinting(eureka);
+    eureka.WaitSaid("tiskárna není připravena", 20s);
+
+    CableEnd printer(machine);
+    machine.SetSerialLink(&printer);
+    eureka.Reset();
+    eureka.WaitIdle(10s);
+    StartPrinting(eureka);
+    eureka.WaitSaid("tisk ukončen", 20s);
+    const std::vector<uint8_t>& page = printer.sent;
+    expect(page.size() == 174,
+           "strana ma " + std::to_string(page.size()) + " bajtov, cakalo sa 174");
+    expect(page.size() >= head.size() &&
+               std::equal(head.begin(), head.end(), page.begin()),
+           "zaciatok strany nesedi");
+    expect(!page.empty() && page.back() == 0x0c, "strana nekonci znakom 0Ch");
+    expect(std::find(page.begin(), page.end(), 0x1b) == page.end(),
+           "v strane je ESC");
+    uint64_t closest = UINT64_MAX;
+    for (std::size_t i = 1; i < printer.sentAt.size(); ++i)
+      closest = std::min(closest, printer.sentAt[i] - printer.sentAt[i - 1]);
+    expect(closest >= kCharacterCycles,
+           "znaky idu rychlejsie nez 9600 Bd: " + std::to_string(closest) + " cyklov");
+
+    CableEnd stalling(machine);
+    machine.SetSerialLink(&stalling);
+    eureka.Reset();
+    eureka.WaitIdle(10s);
+    StartPrinting(eureka);
+    eureka.WaitUntil([&] { return stalling.sent.size() >= 20; }, 20s);
+    stalling.readyFrom = machine.cycles() + EurekaMachine::kCpuHz;
+    eureka.WaitSaid("tisk ukončen", 20s);
+    expect(stalling.sent == page, "strana po vypadku CTS sa lisi od celej strany");
+    machine.SetSerialLink(nullptr);
+  } catch (const Failure& failure) {
+    std::cout << "  " << failure.what() << "\n";
+    machine.SetSerialLink(nullptr);
+    return false;
+  }
+  return passed;
+}
+
+// Komunikace between two machines on a null-modem cable (HANDOFF 6.53): one
+// sends a file with XMODEM, the other receives it, and the file that lands
+// must be the one that left.  1340 bytes is eleven blocks, the last one padded
+// with 1Ah, so the checksums, the ACKs, the padding and EOT all take part.
+bool CheckCable(const wchar_t* romPath) {
+  using namespace eureka;
+  std::error_code ec;
+  const fs::path root = fs::temp_directory_path(ec) / L"ea4_kabel";
+  fs::remove_all(root, ec);
+  fs::create_directories(root / L"a", ec);
+  fs::create_directories(root / L"b", ec);
+  std::string text;
+  for (int line = 0; text.size() < 1340; ++line)
+    text += "Riadok " + std::to_string(line) + " prenosu cez seriovy kabel.\r\n";
+  text.resize(1340);
+  {
+    std::ofstream out(root / L"a" / L"PRENOS.TXT", std::ios::binary);
+    out << text;
+  }
+
+  auto sender = std::make_unique<EurekaMachine>();
+  auto receiver = std::make_unique<EurekaMachine>();
+  std::wstring error;
+  if (!sender->LoadRom(romPath, error) || !receiver->LoadRom(romPath, error) ||
+      !sender->MountDisk(root / L"a", error) ||
+      !receiver->MountDisk(root / L"b", error)) {
+    std::wcout << L"  " << error << L"\n";
+    return false;
+  }
+  CableEnd senderEnd(*sender);
+  CableEnd receiverEnd(*receiver);
+  senderEnd.peer = &receiverEnd;
+  receiverEnd.peer = &senderEnd;
+  sender->SetSerialLink(&senderEnd);
+  receiver->SetSerialLink(&receiverEnd);
+
+  Session a(*sender);
+  Session b(*receiver);
+  bool passed = true;
+  try {
+    a.Reset();
+    b.Reset();
+    a.WaitIdle(10s);
+    b.WaitIdle(10s);
+    // The receiver first, as a person would start it: F4, F3, the name.
+    b.Press(keys::F4);
+    b.WaitSaid("komunikace");
+    b.Press(keys::F3);
+    b.WaitSaid("jméno");
+    b.Type("PRENOS.TXT\r");
+    b.WaitSaid("přijímám");
+    a.Press(keys::F4);
+    a.WaitSaid("komunikace");
+    a.Press(keys::Shift | keys::F3);
+    a.WaitSaid("jméno");
+    a.Type("PRENOS.TXT\r");
+    // In lock step from here on: whichever machine is behind in its own time
+    // runs next, so neither can time out waiting for the other.
+    const std::size_t fromA = a.Transcript().size();
+    const std::size_t fromB = b.Transcript().size();
+    const auto done = [](Session& s, std::size_t from) {
+      return s.Transcript().find("provedeno", from) != std::string::npos;
+    };
+    const uint64_t deadline = sender->cycles() + 60ull * EurekaMachine::kCpuHz;
+    while (!(done(a, fromA) && done(b, fromB)) && sender->cycles() < deadline) {
+      for (int i = 0; i < 20000; ++i) {
+        if (sender->cycles() <= receiver->cycles()) a.Step();
+        else b.Step();
+      }
+    }
+    if (!done(a, fromA) || !done(b, fromB)) {
+      std::cout << "  prenos nedobehol: odosielatel \"" << a.Transcript().substr(fromA)
+                << "\", prijimatel \"" << b.Transcript().substr(fromB) << "\"\n";
+      passed = false;
+    }
+    b.WaitIdle(10s);
+  } catch (const Failure& failure) {
+    std::cout << "  " << failure.what() << "\n";
+    passed = false;
+  }
+  if (passed) {
+    if (!receiver->FlushDisk(error)) {
+      std::wcout << L"  " << error << L"\n";
+      passed = false;
+    } else {
+      std::ifstream in(root / L"b" / L"PRENOS.TXT", std::ios::binary);
+      const std::string got((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+      if (got != text) {
+        std::cout << "  prijaty subor sa lisi: " << got.size() << " bajtov z "
+                  << text.size() << "\n";
+        passed = false;
+      }
+    }
+  }
+  sender->SetSerialLink(nullptr);
+  receiver->SetSerialLink(nullptr);
+  fs::remove_all(root, ec);
+  return passed;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
@@ -2639,11 +2863,20 @@ int wmain(int argc, wchar_t** argv) {
        std::wstring(argv[3]) != L"akord" &&
        std::wstring(argv[3]) != L"budik" &&
        std::wstring(argv[3]) != L"trap" &&
-       std::wstring(argv[3]) != L"session")) {
+       std::wstring(argv[3]) != L"session" &&
+       std::wstring(argv[3]) != L"tlac" &&
+       std::wstring(argv[3]) != L"kabel")) {
     std::wcerr << L"usage: integration_test ROM DISK_FOLDER "
                   L"com|bas|kbd|power|dc|rtc|hudba|zvuk|format|wp|hlaseni|snimka|"
-                  L"akord|budik|trap|session\n";
+                  L"akord|budik|trap|session|tlac|kabel\n";
     return 2;
+  }
+  // Two machines of its own on diskettes of its own; the shared one is not
+  // touched, so the other modes running beside it cannot see this one.
+  if (std::wstring(argv[3]) == L"kabel") {
+    const bool passed = CheckCable(argv[1]);
+    std::cout << (passed ? "PASS" : "FAIL") << " mode=KABEL\n";
+    return passed ? 0 : 1;
   }
   const bool basic = std::wstring(argv[3]) == L"bas";
   auto machine = std::make_unique<EurekaMachine>();
@@ -2714,6 +2947,12 @@ int wmain(int argc, wchar_t** argv) {
   if (std::wstring(argv[3]) == L"session") {
     const bool passed = CheckSession(*machine);
     std::cout << (passed ? "PASS" : "FAIL") << " mode=SESSION\n";
+    return passed ? 0 : 1;
+  }
+
+  if (std::wstring(argv[3]) == L"tlac") {
+    const bool passed = CheckPrinter(*machine);
+    std::cout << (passed ? "PASS" : "FAIL") << " mode=TLAC\n";
     return passed ? 0 : 1;
   }
 

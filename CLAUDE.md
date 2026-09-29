@@ -370,6 +370,20 @@ mutáciou: návrat k tichu konzoly aj zrušenie 20 ms behu režim zhodia.
 Drží aj to, že `WaitSaid` počúva **len odpoveď na posledný kláves** — test
 reč neberie, takže inak by opakovaná otázka našla sama seba z minulého kola.
 
+Režimy `tlac` a `kabel` držia **sériový kanál 1** (`SerialLink`,
+`src/serial_link.h`, HANDOFF 6.3 a 6.53) a sú jediné, čo ho drží — okno doň
+zatiaľ nič nezapája. `tlac` tlačí z textového procesora postupom majiteľa:
+bez kábla musí zaznieť „tiskárna není připravena“, s tlačiarňou v pamäti
+prísť 174 bajtov strany nie rýchlejšie než znak za 6400 cyklov, a pri
+sekundovom výpadku CTS tá istá strana celá. `kabel` spojí dva stroje
+nulmodemom v jednom procese, pošle XMODEM-om 1340 bajtov a porovná prijatý
+súbor s pôvodným; stroje beží striedavo podľa vlastného času, inak by jeden
+odbehol druhému do časového limitu. Diskety si robí v `%TEMP%`, zdieľanú
+nepoužíva. Overené mutáciou: znaky bez času znaku zhodia `tlac`, chýbajúce
+prerušenie od prijatého bajtu `kabel`, CTS aktívne bez kábla zase `tlac`.
+Odpovede na výzvy tlače idú cez `Type`, nie `Press` — hotový kód tam
+nedôjde (`ea4-7zw.5`).
+
 `settings_test` beží tiež bez ROM a v `%TEMP%`. Drží formát súboru
 s nastaveniami a hlavne to, že cesta s diakritikou prežije zápis aj čítanie.
 Drží aj **zámok diskety proti zápisu** (`zamok1=`, `zamok2=`… so zoznamom
@@ -406,8 +420,8 @@ Skutočný súbor nastavení na to nepoužívaj — patrí tomu, kto testy spú�
 
 ## Spustenie testov
 
-`run-tests.bat` zostaví testy a pustí všetkých dvadsať naraz — štyri
-samostatné testy a šestnásť režimov `integration_test`. Sú to nezávislé
+`run-tests.bat` zostaví testy a pustí všetkých dvadsaťdva naraz — štyri
+samostatné testy a osemnásť režimov `integration_test`. Sú to nezávislé
 procesy, nič nezdieľajú. Priečinok diskety si vyrobí čerstvý v
 `build\testdisk` a skopíruje doň `TECHMAN1\READ.COM` z manuálu, bez
 ktorého režim `com` zlyhá. ROM berie z argumentu, inak z `%A4ROM%`, inak
@@ -446,7 +460,7 @@ tri `PASS` a dvanásť zlyhaní, ktoré vyzerali ako chyba emulátora, hoci to
 bola pokazená cesta. Keď na `to_unix` v `run-tests.sh` siahneš, drž sa
 tvaru cesty.
 
-**Keď manuál nie je po ruke, je `PASS` osemnásť a nie je to regresia.**
+**Keď manuál nie je po ruke, je `PASS` dvadsať a nie je to regresia.**
 Dávka vynechá cez `SKIP_MODES` režimy `com` **aj `wp`** a napíše, prečo.
 Že sú to dva a nie jeden, ukázalo až meranie 20. 9. 2026: `wp` spúšťa ten
 istý `READ.COM` a overuje ním, že z chránenej diskety sa dá čítať
@@ -454,8 +468,8 @@ istý `READ.COM` a overuje ním, že z chránenej diskety sa dá čítať
 Odhad hovoril, že ide len o `com`. Zoznam režimov je len v `Makefile`
 (`ALL_MODES`), aby sa druhá kópia nemala ako rozísť.
 
-Výstup drží pohromade `--output-sync=target`; bez neho sa riadky devätnástich
-procesov premiešajú. `-k` nechá dobehnúť aj zvyšok po prvom zlyhaní.
+Výstup drží pohromade `--output-sync=target`; bez neho sa riadky dvadsiatich
+dvoch procesov premiešajú. `-k` nechá dobehnúť aj zvyšok po prvom zlyhaní.
 
 **Pasca, do ktorej som už spadol:** režimy sa v `Makefile` generujú ako
 výslovné pravidlá cez `foreach`/`eval`. Vzorové pravidlo `check-%` tam
@@ -463,7 +477,7 @@ najprv bolo a bolo tiché — `make` implicitné ani vzorové pravidlá na
 `.PHONY` cieľoch nehľadá, takže všetky režimy zostali bez receptu, make ich
 vyhlásil za splnené a `run-tests.bat` ohlásil úspech bez toho, aby čokoľvek
 z nich bežalo. Keď na tú časť siahneš, over počet riadkov `PASS` — musí ich
-byť dvadsať, alebo osemnásť bez manuálu — a raz to skús s nezmyselnou ROM
+byť dvadsaťdva, alebo dvadsať bez manuálu — a raz to skús s nezmyselnou ROM
 aj s nezmyselným `EUREKATECH`, či poistky naozaj zvonia.
 
 ## Diagnostická sonda
@@ -960,7 +974,7 @@ toto je jedno z miest, ktoré by ho zaseklo.
 Kým toto neplatí, nehlás hotovo — a nehlás ani „malo by to fungovať“:
 
 1. `build.bat` prejde bez jediného varovania.
-2. `run-tests.bat` dá **dvadsať** riadkov `PASS` — alebo osemnásť, keď na
+2. `run-tests.bat` dá **dvadsaťdva** riadkov `PASS` — alebo dvadsať, keď na
    stroji nie je Technical Manual a dávka to ohlási. Že sa to preložilo, nie je
    výsledok merania.
 3. Dokumentácia dobehla **v tom istom kroku**, nie „potom“. README, keď sa

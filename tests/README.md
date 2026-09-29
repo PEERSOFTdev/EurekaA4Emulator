@@ -273,6 +273,24 @@ them on the same diskette.
   that gap is lost -- and the hour *and* the minutes after F2.  Verified by
   mutation: judging by console silence instead fails both, and dropping the
   20 ms run fails the first.
+- `tlac` pins ASCI channel 1 as the printer sees it (HANDOFF 6.3).  It prints
+  from the word processor the owner's way (Shift+F1, a word, Shift+F1, P, Y,
+  N) three times: with nothing in the socket the machine must say "tiskárna
+  není připravena"; with a printer in memory (`CableEnd`, a `SerialLink`) it
+  must say "tisk ukončen" and the page must be the 174 bytes the measurement
+  saw -- blank lines, margin, the word, a form feed, no ESC -- no two
+  characters closer than 6400 cycles (9600 Bd 8N1); and a printer that drops
+  CTS for a second after 20 bytes must still get that page whole.  The answers
+  go through `Type`: a code queued ready-made is not taken at those prompts.
+- `kabel` pins the receiving side as well: two machines on a null-modem cable
+  in one process, stepped in turn by their own clocks so neither runs into a
+  timeout waiting for the other.  One sends a 1340-byte file with Komunikace
+  (F4, Shift+F3), the other receives it (F4, F3) over XMODEM (HANDOFF 6.53),
+  both must say "provedeno", and the file that lands must equal the one that
+  left.  It makes its own diskettes in `%TEMP%` and leaves the shared one
+  alone.  Verified by mutation: characters sent without a character time fail
+  `tlac`, no receive interrupt fails `kabel`, and CTS asserted with no cable
+  fails `tlac`.
 
 The test disk folder must contain a native Eureka `READ.COM` and `BEEP.BAS`.
 A genuine `READ.COM` ships with the Technical Manual's development disk, which
@@ -281,7 +299,7 @@ is third-party material and therefore **not in this repository** -- see
 is `C:\b\eurekatech`) and `run-tests.bat` copies the file in for you.
 
 Without it the `com` and `wp` modes are skipped and the suite reports
-eighteen `PASS` lines instead of twenty, saying so as it goes.  Both modes run that
+twenty `PASS` lines instead of twenty-two, saying so as it goes.  Both modes run that
 same `READ.COM`: `com` to start it, `wp` to show a write-protected diskette
 still reads (`CheckProtectedDiskStillReads`).  Nothing else needs the manual.
 Copy the file yourself only if you are running `integration_test.exe` by hand
@@ -359,7 +377,10 @@ Results of the current sweep:
   follow the timer rather than be assumed constant;
 - latch bits still never exercised: B0 bit 0 (disk density), B0 bit 7 (RTS),
   A0 bit 2 (output device select). Reaching those needs an actual format, an
-  actual serial session and an actual print.
+  actual serial session and an actual print.  (29. 9. 2026: a print and a
+  Komunikace transfer have now run, `tlac` and `kabel`; RTS stays put in both,
+  and correctly so -- only a nearly full receive buffer raises it, HANDOFF
+  6.4.)
 
 The temperature and voltage the sweep reports come from the synthetic
 comparator thresholds in `EurekaMachine::ReadInputBuffer`, not from anything

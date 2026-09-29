@@ -4027,6 +4027,24 @@ oneskorene; prečo meno napísané po omylom otvorenom „adresáři disku“
 buffra a pri prerušenom spojení. Práca: epic `ea4-7zw`, zvyšky
 v `ea4-7zw.5`.
 
+**Model v kóde, 29. 9. 2026 (`ea4-7zw.1`).** ASCI1 je teraz zariadenie:
+`SerialLink` (`src/serial_link.h`) je druhý koniec kábla — CTS, RTS, znaky
+oboma smermi — a `EurekaMachine::SetSerialLink` ho zapojí. Vysielač je
+dvojito bufrovaný ako na čipe, TDRE je dole po čas znaku a znak dostane
+partner až po ňom; čas znaku sa počíta pri každom znaku z CNTLA1 a CNTLB1
+vzorcom vyššie, takže nastavenie v Komunikácii platí hneď. Príjem nastaví
+RDRF (čítanie RDR1 ho zhodí) len pri zapnutom RE, jeden znak za čas znaku,
+a vyvolá prerušenie na `IL|10h`. Pri 7 dátových bitoch prejde v oboch
+smeroch len dolných sedem. Bez kábla je CTS neaktívne ako doteraz.
+
+Zámerne **nie je**: parita a chyby rámca (nesúlad parametrov dvoch koncov
+sa neemuluje, obe strany emulovaného kábla sa zhodnú), pretečenie
+(znak sa od partnera berie až pri voľnom RDR, takže kábel nestratí nič —
+firmvér RDR vyprázdňuje pri každom prerušení a RTS zhodí pri plnom buffri),
+CTS1E v STAT1 (ROM ho nezapína) a kanál 0. Okno doň zatiaľ nič nezapája;
+drží ho len `integration_test tlac` a `kabel` (overené mutáciou, viď
+`tests/README.md`). Ďalší krok je kábel cez TCP, `ea4-7zw.4`.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.

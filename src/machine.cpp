@@ -195,6 +195,12 @@ void EurekaMachine::PowerOn() {
   csioData_ = 0;
   csioPending_ = false;
   csioReadyAt_ = 0;
+  asci1Tdr_.reset();
+  asci1Shift_.reset();
+  asci1ShiftDoneAt_ = 0;
+  asci1Rdr_ = 0;
+  asci1Rdrf_ = false;
+  asci1RxReadyAt_ = 0;
   rtcLatched_ = false;
   // rtc_mask and rtc_command are NOT reset here: they live in the clock chip,
   // on the supply that never cuts (GLOSSARY.TXT), same as rtcRam_.  A hand
@@ -548,8 +554,12 @@ uint8_t EurekaMachine::ReadInputBuffer() const {
   // to the DAC at 19A01 and treats bit 1 as low battery at 19839 and 19A18.
   // Nothing else lives on bit 1: the FDC's INTRQ is not readable here, and
   // reporting it on this bit made every disk command fail as "slaba baterie".
-  // Those three are active low, so leaving them set is the idle state.
-  uint8_t value = hw::kCts1Mask | hw::kRingMask;
+  // Those three are active low, so leaving them set is the idle state.  CTS1
+  // is the one printing and Komunikace wait on (184F2, HANDOFF 6.3), and with
+  // nothing in the socket nobody asserts it.
+  uint8_t value = hw::kRingMask;
+  if (serialLink_ == nullptr || !serialLink_->ClearToSend())
+    value |= hw::kCts1Mask;
   if (!phoneLine_) value |= hw::kDcd0Mask;
   if (dac_ >= vm1Threshold) value |= hw::kVm1Mask;
   if (dac_ >= vm2Threshold) value |= hw::kVm2Mask;
@@ -860,10 +870,13 @@ uint8_t EurekaMachine::ReadPortInner(z80* cpu, uint16_t port) {
   switch (low) {
     case hw::kStat0:
       return static_cast<uint8_t>(machine->io_[hw::kStat0] | hw::kStatTdre);
-    case hw::kStat1:
-      return static_cast<uint8_t>(machine->io_[hw::kStat1] | hw::kStatTdre);
+    case hw::kStat1: return machine->ReadAsci1Status();
     case hw::kRdr0: return 0;
-    case hw::kRdr1: return 0;
+    case hw::kRdr1:
+      // Reading RDR is what clears RDRF; the handler at 1E021 does it once
+      // per interrupt, so the next byte cannot land before this one is taken.
+      machine->asci1Rdrf_ = false;
+      return machine->asci1Rdr_;
     case hw::kCntr:
       return static_cast<uint8_t>(
           machine->io_[hw::kCntr] | (machine->csioPending_ ? hw::kCntrEf : 0));
@@ -945,6 +958,13 @@ void EurekaMachine::WritePort(z80* cpu, uint16_t port, uint8_t value) {
   }
   if (low != hw::kTcr) machine->io_[low] = value;
   switch (low) {
+    // Format and bit rate are read back from io_ each time a character starts,
+    // so a change in Komunikace takes effect at once (18423-18445).
+    case hw::kCntla1: break;
+    case hw::kCntlb1: break;
+    // Written while TDRE is clear, the byte replaces the waiting one, as on
+    // the chip; this ROM always checks TDRE first (184F2).
+    case hw::kTdr1: machine->asci1Tdr_ = value; break;
     case hw::kCntr: break;
     case hw::kTrdr:
       // FFh is the Reset command every PC keyboard answers with AAh, "self
@@ -1026,6 +1046,9 @@ void EurekaMachine::WritePort(z80* cpu, uint16_t port, uint8_t value) {
     case hw::kOutputLatch:
       if (machine->diag_.enabled())
         machine->diag_.NoteLatch(cpu->pc, low, machine->outputLatch_, value);
+      if (machine->serialLink_ != nullptr &&
+          ((machine->outputLatch_ ^ value) & hw::kRts1Mask) != 0)
+        machine->serialLink_->SetRequestToSend((value & hw::kRts1Mask) == 0);
       machine->outputLatch_ = value;
       break;
     default:
@@ -1494,6 +1517,7 @@ void EurekaMachine::Advance(uint32_t cpuCycles) {
   cycles_ += cpuCycles;
   RenderAudio(cpuCycles);
   PumpCsio();
+  PumpAsci1();
   UpdateRtcEvents();
   const uint8_t control = io_[hw::kTcr];
   for (unsigned channel = 0; channel < 2; ++channel) {
@@ -1548,6 +1572,89 @@ void EurekaMachine::ScheduleInterrupt() {
     // up until the handler reads TRDR, so this re-arms by itself.
     cpu_.interrupt_mode = 2;
     z80_gen_int(&cpu_, static_cast<uint8_t>(base | hw::kVectorCsio));
+  } else if (Asci1Interrupt()) {
+    // Below the CSI/O, again the HD64180's order.
+    cpu_.interrupt_mode = 2;
+    z80_gen_int(&cpu_, static_cast<uint8_t>(base | hw::kVectorAsci1));
+  }
+}
+
+// The ROM only ever sets RIE (STAT1 = 08h); TIE is here because the chip has
+// it.  Both are levels that drop when RDR is read or TDR written.
+bool EurekaMachine::Asci1Interrupt() const {
+  const uint8_t status = ReadAsci1Status();
+  return ((status & hw::kStatRdrf) != 0 && (status & hw::kStatRie) != 0) ||
+         ((status & hw::kStatTdre) != 0 && (status & hw::kStatTie) != 0);
+}
+
+void EurekaMachine::SetSerialLink(SerialLink* link) {
+  serialLink_ = link;
+  if (link != nullptr)
+    link->SetRequestToSend((outputLatch_ & hw::kRts1Mask) == 0);
+}
+
+// PHI / (PS * DR * SS), per the data sheet; the firmware's nine speeds all land
+// on it (HANDOFF 6.53).  0 means the external clock, which nothing on this
+// board drives, so a channel set to it never shifts a bit.
+uint32_t EurekaMachine::Asci1BitCycles() const {
+  const uint8_t control = io_[hw::kCntlb1];
+  if ((control & hw::kCntlbSs) == hw::kCntlbSsExternal) return 0;
+  const uint32_t prescale = (control & hw::kCntlbPs) != 0 ? 30 : 10;
+  const uint32_t ratio = (control & hw::kCntlbDr) != 0 ? 64 : 16;
+  return prescale * ratio * (1u << (control & hw::kCntlbSs));
+}
+
+// Start bit, 7 or 8 data bits, the parity bit if there is one, and 1 or 2 stop
+// bits: 10 bits at 9600 Bd 8N1 is the 6400 cycles the prototype measured.
+uint32_t EurekaMachine::Asci1CharacterCycles() const {
+  const uint8_t format = io_[hw::kCntla1];
+  const uint32_t bits = 1 + ((format & hw::kCntlaMod2) != 0 ? 8 : 7) +
+                        ((format & hw::kCntlaMod1) != 0 ? 1 : 0) +
+                        ((format & hw::kCntlaMod0) != 0 ? 2 : 1);
+  return bits * Asci1BitCycles();
+}
+
+// With 7 data bits the top one never reaches the wire, in either direction.
+// Parity is not modelled: both ends of an emulated cable agree by
+// construction, and a mismatch between them is not simulated (HANDOFF 6.53).
+uint8_t EurekaMachine::Asci1DataMask() const {
+  return (io_[hw::kCntla1] & hw::kCntlaMod2) != 0 ? 0xff : 0x7f;
+}
+
+uint8_t EurekaMachine::ReadAsci1Status() const {
+  uint8_t status = static_cast<uint8_t>(
+      io_[hw::kStat1] & (hw::kStatRie | hw::kStatCts1e | hw::kStatTie));
+  if (asci1Rdrf_) status |= hw::kStatRdrf;
+  if (!asci1Tdr_) status |= hw::kStatTdre;
+  return status;
+}
+
+// Moves characters along the wire in their own time.  A character leaves the
+// shift register a whole character time after it entered it, and only then
+// does the far end get it; the next one waits in TDR, which is what keeps
+// TDRE low at 9600 Bd for as long as the real line would.  Receiving is paced
+// the same way, and a character is taken from the far end only when RDR is
+// free, so nothing is ever overrun: the firmware empties RDR on every
+// interrupt and drops RTS when its own buffer fills (1860D), and a cable that
+// cannot lose a byte is what both ends of an emulated one expect.
+void EurekaMachine::PumpAsci1() {
+  const uint32_t character = Asci1CharacterCycles();
+  if (character == 0) return;
+  if (asci1Shift_ && cycles_ >= asci1ShiftDoneAt_) {
+    if (serialLink_ != nullptr) serialLink_->Transmit(*asci1Shift_);
+    asci1Shift_.reset();
+  }
+  if (!asci1Shift_ && asci1Tdr_ && (io_[hw::kCntla1] & hw::kCntlaTe) != 0) {
+    asci1Shift_ = static_cast<uint8_t>(*asci1Tdr_ & Asci1DataMask());
+    asci1Tdr_.reset();
+    asci1ShiftDoneAt_ = cycles_ + character;
+  }
+  if (serialLink_ == nullptr || asci1Rdrf_ || cycles_ < asci1RxReadyAt_) return;
+  if ((io_[hw::kCntla1] & hw::kCntlaRe) == 0) return;
+  if (const std::optional<uint8_t> received = serialLink_->Receive()) {
+    asci1Rdr_ = static_cast<uint8_t>(*received & Asci1DataMask());
+    asci1Rdrf_ = true;
+    asci1RxReadyAt_ = cycles_ + character;
   }
 }
 

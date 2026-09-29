@@ -44,6 +44,36 @@ constexpr uint8_t kRdr1 = 0x09;    // rdr1
 // Data sheet: STAT bit 1 is TDRE and reads high whenever the transmit data
 // register is free.  The ROM probes both channels expecting that.
 constexpr uint8_t kStatTdre = 0x02;
+// Data sheet: the rest of STAT.  RDRF says a byte waits in RDR and clears when
+// RDR is read; the receive handler at 1E021 tests it together with the three
+// error flags (AND F0h, HANDOFF 6.53).  RIE and TIE enable the receive and
+// transmit interrupts.  Bit 2 is DCD0 on channel 0 and CTS1E on channel 1;
+// this ROM writes STAT1 = 08h, so CTS1 never gates the transmitter and is read
+// on A8h instead (6.3).
+constexpr uint8_t kStatRdrf = 0x80;
+constexpr uint8_t kStatRie = 0x08;
+constexpr uint8_t kStatCts1e = 0x04;
+constexpr uint8_t kStatTie = 0x01;
+
+// Data sheet: CNTLA.  RE and TE switch the receiver and the transmitter on;
+// MOD2-0 give the character format -- 8 data bits instead of 7, a parity bit,
+// 2 stop bits instead of 1.
+constexpr uint8_t kCntlaRe = 0x40;
+constexpr uint8_t kCntlaTe = 0x20;
+constexpr uint8_t kCntlaMod2 = 0x04;
+constexpr uint8_t kCntlaMod1 = 0x02;
+constexpr uint8_t kCntlaMod0 = 0x01;
+
+// Data sheet: CNTLB.  The bit rate is PHI / (PS * DR * SS): PS a prescale of
+// 10 or 30, DR a divide ratio of 16 or 64, SS2-0 a further 1 to 64 in powers
+// of two, with 111 meaning an external clock.  PEO picks odd parity.  The
+// commented-out b_150..b_38400 table in IOREG.I uses exactly these fields, and
+// every speed the ROM offers was checked against them (HANDOFF 6.53).
+constexpr uint8_t kCntlbPs = 0x20;
+constexpr uint8_t kCntlbPeo = 0x10;
+constexpr uint8_t kCntlbDr = 0x08;
+constexpr uint8_t kCntlbSs = 0x07;
+constexpr uint8_t kCntlbSsExternal = 0x07;
 
 // CSI/O, the clocked serial port.  This machine wires the PC keyboard to it.
 constexpr uint8_t kCntr = 0x0a;  // cntr
@@ -212,6 +242,9 @@ constexpr uint8_t kVectorTimer1 = 0x06;  // PRT channel 1
 // The clocked serial port, which is where this image puts the handler for the
 // IBM PC keyboard.
 constexpr uint8_t kVectorCsio = 0x0c;
+// ASCI channel 1, the RS-232 socket.  Slot C190 leads through CD55 to the
+// receive handler at 1E021 (HANDOFF 6.53).
+constexpr uint8_t kVectorAsci1 = 0x10;
 
 // Data sheet: CBAR splits the 64K logical space.  The low nibble scaled by 4K
 // starts the bank area, the high nibble scaled by 4K starts common area 1.
