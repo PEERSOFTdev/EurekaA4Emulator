@@ -436,7 +436,7 @@ konzolový.
 | 7, 6 | — | nepoužité |
 | 5 | `dcd0_mask` | aktívne v nule; detekcia nosnej z modemu AM7910. Pollované s počítadlom pokusov na 18F99, 18FB1, 19097; na 19097 je to čakanie na oznamovací tón pred vytáčaním (HANDOFF 6.49) |
 | 3 | `ring_mask` | aktívne v nule; prítomnosť vyzváňacieho napätia (automatické zdvihnutie) |
-| 2 | `cts1_mask` | aktívne v nule; CTS na RS-232. **Pripravenosť tlačiarne**: test ASCI1 na `184F2` (`IN A,(A8h)` / `AND 04h`), HANDOFF 6.3 |
+| 2 | `cts1_mask` | aktívne v nule; CTS na RS-232. **Pripravenosť tlačiarne** aj vysielania Komunikácie: test ASCI1 na `184F2` (`IN A,(A8h)` / `AND 04h`), HANDOFF 6.3 a 6.53 |
 | 1 | `vm2_mask` | druhý komparátor: podľa `vmsel` externý voltmeter alebo **napätie batérie** |
 | 0 | `vm1_mask` | prvý komparátor: podľa `vmsel` vnútorný teplomer alebo potenciometer rýchlosti reči |
 

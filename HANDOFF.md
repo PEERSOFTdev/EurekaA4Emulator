@@ -3896,6 +3896,91 @@ kľúče, ktoré nepozná (`aktualizacie`, `posledna-kontrola`) — tak je súbo
 navrhnutý a hovorí to jeho hlavička. Chýbajúci kľúč znamená zapnuté,
 takže to aktualizácie nevypne.
 
+### 6.53 Komunikácia: XMODEM cez ASCI1
+
+Odmerané 29. 9. 2026 sondou s dočasnou inštrumentáciou a modelom príjmu
+v kópii mimo repozitára (`C:\b\ea4-serial-scratch`, `PROGRESS.md`,
+`tests\comm_test.cpp`; diskety `C:\b\ea4-comm`). Postup a stopky od
+majiteľa: F4 „komunikace“; F3 „příjem souboru“, meno, Enter, „přijímám“,
+po asi 80 s „není odezva“; Shift+F3 (`D2h`, nie `D3h` — to je Shift+F4,
+„adresář disku“) „vysílání souboru“, meno, Enter, „vysílám, čekám na
+přijímač“, po asi 66 s „není odezva“; F4 „mluvící terminál“.
+
+**Kanál.** Príjem, vysielanie aj terminál idú cez **ASCI1**, ten istý port
+ako tlač (6.3). Vstup do Komunikácie (`14BA4`) volá `E20E` s `A=1`, teda
+`B88F`=1. ASCI0 (`B88F`=0, modem) nastavuje len telefónna cesta na
+`14E0D` — neodmerané. Parametre z `C4E4`=`06h`, `C4E5`=`0Ch`,
+`C4E6`=`00h`: 9600 Bd 8N1, XON/XOFF vypnuté.
+
+**To je len predvolené nastavenie po resete, nie vlastnosť kanála**
+(majiteľ, 29. 9. 2026). V Komunikácii Shift+F1 otvorí parametre prenosu:
+F1 až F6 nastavujú modem, Shift+F1 až Shift+F6 sériovú linku, každý
+kláves cyklicky prepína svoj parameter a ľubovoľný iný kláves (napríklad
+medzerník) z nastavenia odíde. Tlačiareň má vlastnú sadu (Režim, F9, F8
+„parametry tiskárny“, F1 až F5; `C4DE`–`C4E0`, 6.3), Komunikácia svoju
+(`C4E4`–`C4E6`). Model preto rýchlosť a formát **nesmie predpokladať** —
+musí ich brať z CNTLA1/CNTLB1, ktoré ROM z týchto bajtov nastaví.
+Že sa zmena parametra do registrov naozaj prepíše, zatiaľ odmerané nie je.
+
+Pripravenosť na vysielanie je
+tá istá ako pri tlači (`184F2`: TDRE, `A8h` bit 2 v nule, `C595` bit 1);
+DCD sa na ASCI1 nečíta.
+
+**Protokol je XMODEM so súčtom, nie CRC.**
+
+- Prijímač (`153EE`) začína NAK `15h`, `C` neposiela. 30 pokusov
+  (`B=1Eh` na `153F6`) po 1,053 s (`158BB`: 100 × test prijatého bajtu).
+  S aktívnym CTS vyjde „není odezva“ po 31,6 s; bez neho každý NAK najprv
+  prepadne 65 536 ankami v `D4C2` (1,573 s), perióda je 2,626 s a 30 ×
+  2,626 = **78,8 s** — stopky majiteľa.
+- Vysielač (`15566`) pri čakaní nevysiela nič: 60 pokusov (`B=3Ch`) ×
+  1,053 s = 63 s, s rečou okolo 66 s — stopky majiteľa. CTS pri čakaní
+  nerozhoduje.
+- Blok (`15586`): SOH `01h`, číslo, doplnok, 128 bajtov, súčet mod 256;
+  výplň posledného bloku `1Ah`. ACK `06h` = ďalší blok, CAN `18h` alebo
+  vypršanie (`DE=EA60h`) = „přijímač odpojen“, iné = opakovať. Koniec:
+  EOT `04h` najviac päťkrát, každý s čakaním `DE=2710h` na ACK.
+- Prijímač (`15443`–`15515`) potvrdí duplicitný blok ACK, chybu súčtu
+  ohlási „chyba kontrolního součtu“ a pošle NAK, najviac päťkrát, potom
+  CAN CAN; na ďalší blok čaká `DE=05DCh`, asi 15,8 s. Oneskorenie
+  internetu mu teda vadiť nebude.
+
+**Overené prenosom medzi dvoma strojmi v jednom procese:** TDR1 jedného do
+RDR1 druhého a späť, CTS aktívne, bajt najskôr raz za 6400 cyklov.
+`BIG.TXT` (1340 B, 11 blokov) aj `TEST.TXT` (96 B) prešli, `cmp` hlási
+zhodu, obe strany povedali „provedeno“. Výmena pri `TEST.TXT`: prijímač
+`15` v 7,71, 8,77, 9,82 a 10,87 s; vysielač `01 01 FE 41 68 6F 6A …`,
+výplň `1A`, súčet `C8`; prijímač `06`; vysielač `04`; prijímač `06`.
+
+**Mluvící terminál** počúva na ASCI1 a číta, čo príde („AHOJ“ povedal
+„AHOJ“, CR „.“). Napísané klávesy **neodosiela** (TDR1 zostal nedotknutý).
+Escape ako scancode `s01` vráti do „komunikace“.
+
+**Čo z toho plynie pre model príjmu** (dnes RDR vracia 0 a STAT nemá
+RDRF):
+
+- STAT1 bit 7 RDRF, zhodí ho čítanie RDR1. Obsluha testuje RDRF, OVRN, PE
+  a FE naraz (`AND F0h`) a pri chybe zhodí EFR (CNTLA bit 3) a bajt zahodí.
+- Bajt sa doručuje len pri zapnutom RE (CNTLA1 bit 6).
+- Prerušenie ASCI1 pri RDRF a RIE (STAT1 = `08h` z bootu), priorita pod
+  CSI/O. Vektor: I=`C1h`, IL=`80h`, slot `C190` → RAM `CD55` → `D40F`
+  (CBR=`10h`) → `JP E021`, obsluha na `1E021`.
+- Kruhový buffer 128 B na `C59A`, zapisovací index `C598`, čítací
+  `C599`, príznaky `C595`, čakajúci XOFF `C596`, XON/XOFF `C597`. RTS1
+  zdvíha pri aspoň `7Ch` bajtoch (6.4); počas prenosov sa nepohol.
+- Vysielacie prerušenie netreba — TIE sa nezapína, zápis na `0905h`
+  mieri mimo STAT1 (6.3).
+
+V prototype TDRE nikdy neklesne, takže blok odíde za asi 30 ms namiesto
+137 ms pri 9600 Bd; prenosu to neprekážalo, model v repozitári má takt
+držať.
+
+**Otvorené:** modemová cesta cez ASCI0; prečo reč terminálu chodí
+oneskorene; prečo meno napísané po omylom otvorenom „adresáři disku“
+(`D3h`) odišlo na TDR1 (`45 53 54 2E 54 58 54 0D`); prijímač pri preplnení
+buffra a pri prerušenom spojení. Práca: epic `ea4-7zw`, zvyšky
+v `ea4-7zw.5`.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
@@ -4014,7 +4099,8 @@ skutočný posuvník rýchlosti (6.34, Otvorené).
     **Čiastočne hotové 29. 9. 2026:** tlač je odmeraná a otázka 6.3 pre ňu
     rozhodnutá — pripravenosť je `A8h` bit 2, tlačiareň je na ASCI1 a bit 7
     `B0h` pri tlači stojí správne (6.3, 6.4). Bit 5 zostáva otvorený.
-    Pokračuje sa modelom kanála 1, epic `ea4-7zw`.
+    Pokračuje sa modelom kanála 1, epic `ea4-7zw`. Komunikácia je XMODEM
+    na tom istom kanáli, overený prenosom medzi dvoma strojmi (6.53).
 
 ### Čím sa dá testovať
 
