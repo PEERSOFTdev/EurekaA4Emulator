@@ -1000,8 +1000,16 @@ alebo z vnútorného prerábania bez zmeny správania. A ani uprostred rozrobene
 veci, ktorá má viac krokov — vtedy až po poslednom z nich.
 
 Vydanie **nespúšťaj sám**. Je verejné a ponúkne sa každému používateľovi, takže
-rozhoduje majiteľ. Spúšťa sa `gh workflow run vydanie.yml`; číslo si workflow
-dopočíta sám (epic `ea4-hg9`).
+rozhoduje majiteľ. Spúšťa sa `./release` (skript pre bash v koreni, bez
+prípony, preto má v `.gitattributes` vlastné pravidlo LF): pushne, počká na
+„Zostavenie“ toho commitu, spustí `vydanie.yml`, počká naň a vypíše adresu.
+Číslo si workflow dopočíta sám (epic `ea4-hg9`). Priebeh vypisuje po riadkoch
+len pri zmene a nie cez `gh run watch` — ten prekresľuje obrazovku, čítačka by
+čítala dookola to isté, a bez čísla behu sa pýta, ktorý sledovať. Keď v
+skripte meníš sledovanie, over ho na už skončenom behu (`source ./release`
+načíta funkcie bez spustenia, potom `find_run` a `watch_run`), nie novým
+vydaním. Pozor, `find_run` pri nenájdení čaká dve minúty — na skúšku
+„nenašlo sa“ sa nehodí.
 
 Konce riadkov drží `.gitattributes`, nie ty: `* text=auto` ukladá do
 repozitára LF, `*.bat` zostáva CRLF (`cmd.exe` na LF-only dávkach vie

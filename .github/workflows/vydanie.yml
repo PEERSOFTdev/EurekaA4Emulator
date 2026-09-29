@@ -24,11 +24,13 @@ permissions:
 
 jobs:
   cislo:
+    name: Číslo vydania
     runs-on: ubuntu-latest
     outputs:
       znacka: ${{ steps.cislo.outputs.znacka }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Zdrojáky
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -56,12 +58,14 @@ jobs:
           "znacka=$tag" >> $env:GITHUB_OUTPUT
 
   zostavenie:
+    name: Zostavenie
     needs: cislo
     uses: ./.github/workflows/zostavenie.yml
     with:
       znacka: ${{ needs.cislo.outputs.znacka }}
 
   zverejnenie:
+    name: Zverejnenie
     needs: [cislo, zostavenie]
     runs-on: windows-latest
     permissions:
@@ -70,11 +74,13 @@ jobs:
       ZNACKA: ${{ needs.cislo.outputs.znacka }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Zdrojáky
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v7
+      - name: Artefakt zostavenia
+        uses: actions/download-artifact@v7
         with:
           name: EurekaA4Emulator
           path: vydanie
@@ -102,6 +108,10 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path balik).Path,
               "$PWD\vydanie\$name.zip")
+          # Ten istý ZIP ešte raz bez verzie v mene, aby existoval trvalý odkaz
+          # .../releases/latest/download/EurekaA4Emulator.zip -- s verziou v mene
+          # by každé vydanie malo inú adresu a rozposlaný odkaz by zastaral.
+          Copy-Item "vydanie\$name.zip" vydanie\EurekaA4Emulator.zip
 
       # Poistka proti firmvéru v čomkoľvek, čo ide von: podľa mena aj podľa
       # veľkosti (ROM má 262144 bajtov), aj vnútri ZIP-u a doplnku.

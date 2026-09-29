@@ -15,6 +15,13 @@ doplnok pre NVDA (`eurekaA4Emulator.nvda-addon`, nainštaluje sa Enterom)
 a tento návod. Emulátor a doplnok sú na stránke vydania aj samostatne.
 Súbor `SHA256SUMS.txt` obsahuje ich kontrolné súčty.
 
+Tieto odkazy vždy stiahnu najnovšie vydanie, takže sa dajú rozposlať a
+nezastarajú:
+
+- balík: <https://github.com/lpintes/EurekaA4Emulator/releases/latest/download/EurekaA4Emulator.zip>
+- samotný emulátor: <https://github.com/lpintes/EurekaA4Emulator/releases/latest/download/EurekaA4Emulator.exe>
+- doplnok pre NVDA: <https://github.com/lpintes/EurekaA4Emulator/releases/latest/download/eurekaA4Emulator.nvda-addon>
+
 Verzia má tvar rok.mesiac.poradie, napríklad `2026.9.1` je prvé vydanie
 v septembri 2026.
 

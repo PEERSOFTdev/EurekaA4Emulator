@@ -31,11 +31,13 @@ permissions:
 
 jobs:
   zostavenie:
+    name: Preklad a testy
     runs-on: windows-latest
     steps:
       # Celá história aj so značkami: bez nich git describe nenájde verziu
       # a zostavenie by sa volalo 0.0.0-hash.
-      - uses: actions/checkout@v5
+      - name: Zdrojáky
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -60,7 +62,8 @@ jobs:
       # msys2 odporúča prejsť z MINGW64 na UCRT64; tu zostáva MINGW64 zámerne,
       # lebo tým istým prekladačom sa zostavuje lokálne (CLAUDE.md) a vydaná
       # binárka má vzniknúť tak isto. Prechod by bol na oboch miestach naraz.
-      - uses: msys2/setup-msys2@v2
+      - name: Prekladač msys2
+        uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           suppress-deprecation-warnings: msystem-mingw64
@@ -108,7 +111,8 @@ jobs:
       # Výslovný zoznam, nie celé bin\ -- lokálne v ňom býva A4ROM.DMP
       # (ea4-blw). Artefakt sa dá stiahnuť len prihlásený; pre ľudí sú vydania.
       # v6 a nie v4/v5: tie bežia na Node 20, ktorý GitHub vyraďuje.
-      - uses: actions/upload-artifact@v6
+      - name: Uloženie artefaktu
+        uses: actions/upload-artifact@v6
         with:
           name: EurekaA4Emulator
           path: |
