@@ -372,8 +372,8 @@ reč neberie, takže inak by opakovaná otázka našla sama seba z minulého kol
 
 Režimy `tlac` a `kabel` držia **sériový kanál 1** (`SerialLink`,
 `src/serial_link.h`, HANDOFF 6.3 a 6.53) a sú jediné, čo ho drží. V okne je
-do zásuvky zapojený `TcpLink` (`EmulatorThread`), ponuka k nemu zatiaľ nie je
-(`ea4-7zw.4`); bez spojenia sa správa ako prázdna zásuvka. `tlac` tlačí z textového procesora postupom majiteľa:
+do zásuvky zapojený `TcpLink` (`EmulatorThread`, ponuka **Stroj → Sériový
+kábel**, `ea4-7zw.4`); bez spojenia sa správa ako prázdna zásuvka. `tlac` tlačí z textového procesora postupom majiteľa:
 bez kábla musí zaznieť „tiskárna není připravena“, s tlačiarňou v pamäti
 prísť 174 bajtov strany nie rýchlejšie než znak za 6400 cyklov, a pri
 sekundovom výpadku CTS tá istá strana celá. `kabel` spojí dva stroje
@@ -409,6 +409,10 @@ Drží aj **aktualizácie** (`aktualizacie=`, `posledna-kontrola=`,
 `preskocena-verzia=`, `ea4-hg9.4`): rovnako ako zachovanie RAM chýbajúci kľúč
 aj iné slovo než `0` znamenajú zapnuté — súbor spred aktualizácií ich nesmie
 ticho vypnúť. Overené mutáciou (`!= L"0"` → `== L"1"`).
+Drží aj **posledné odpovede sériového kábla** (`kabel-port=`, `kabel-adresa=`,
+`ea4-7zw.4`): že adresa s dvojbodkami, zátvorkami aj diakritikou príde späť
+tak, ako bola napísaná, a že zrušená zo súboru zmizne. Sú to texty, nie čísla —
+či dávajú zmysel, rozhoduje dialóg (`ParseTcpAddress`, drží `link_test`).
 Pravidlá samotnej ponuky — čo je značka vydania v presmerovaní GitHubu, súčet
 zo `SHA256SUMS.txt`, že vývojové zostavenie neponúka nič a preskočená verzia sa
 neponúkne, novšia než ona áno — drží `update_test` (`src/update.*`, bez siete).

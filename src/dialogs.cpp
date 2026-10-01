@@ -49,6 +49,35 @@ bool SlidersDialog::OnOk() {
   return true;
 }
 
+bool CableDialog::OnInit() {
+  const bool listen = end_ == End::kListen;
+  SetWindowTextW(hwnd_, listen ? L"Čakať na spojenie" : L"Pripojiť sa k emulátoru");
+  SetText(IDC_CABLE_LABEL, listen ? L"&Port:" : L"&Adresa:");
+  SetText(IDC_CABLE_TEXT, text_);
+  return false;
+}
+
+bool CableDialog::OnOk() {
+  const std::wstring typed = GetText(IDC_CABLE_TEXT);
+  const bool listen = end_ == End::kListen;
+  // A field left empty means the default, and saying so out loud would be a
+  // question about nothing.
+  const bool parsed =
+      listen ? (typed.empty() || ParseTcpPort(typed, port_))
+             : ParseTcpAddress(typed, TcpLink::kDefaultPort, host_, port_);
+  if (!parsed) {
+    MessageBoxW(hwnd_,
+                listen ? L"Port musí byť číslo od 1 do 65535."
+                       : L"Zadajte adresu počítača, napríklad 192.168.1.20, "
+                         L"alebo s portom 192.168.1.20:5000.",
+                L"Sériový kábel", MB_OK | MB_ICONWARNING);
+    SetFocus(Item(IDC_CABLE_TEXT));
+    return false;
+  }
+  text_ = typed;
+  return true;
+}
+
 namespace {
 
 // Whether this slot's lock outlives the emulator.  It is written into

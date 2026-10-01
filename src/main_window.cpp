@@ -85,6 +85,14 @@ void TonePoweredOn() { Tone(300, 100); Tone(500, 100); Tone(700, 150); }
 // F11, sounds in the same breath.
 void ToneSliderEnd() { Tone(1600, 60); }
 
+// The serial cable to another emulator.  The only four-note shape, quick and
+// even, so it is not the power switch's three slow ones: the cable changes
+// under the user without a key being pressed -- the other side connects or
+// goes away -- and a cable that silently is not there sounds exactly like one
+// that is.  Up for plugged in, down for gone, whichever end did it.
+void ToneCableIn() { Tone(500, 40); Tone(750, 40); Tone(1000, 40); Tone(1500, 80); }
+void ToneCableOut() { Tone(1500, 40); Tone(1000, 40); Tone(750, 40); Tone(500, 80); }
+
 
 // Kept in one place so the menu, the help text and this list cannot drift
 // apart.  A shortcut a screen reader never reads is a shortcut nobody has.
@@ -287,6 +295,42 @@ void MainWindow::RegisterCommands() {
   OnCommand(ID_MACHINE_PHONELINE, [this] {
     phoneLine_ = !phoneLine_;
     emulator_.PostSetPhoneLine(phoneLine_);
+    RefreshTitle();
+  });
+  // The cable is called directly and not through the queue: it is not the
+  // machine (emulator_thread.h).  The title follows at once, because the
+  // state it names is already true; the tones wait for WM_EMU_CABLE, which
+  // is when something has actually been plugged in.
+  OnCommand(ID_CABLE_LISTEN, [this] {
+    const std::wstring offered = settings_.cable_port().empty()
+                                     ? std::to_wstring(TcpLink::kDefaultPort)
+                                     : settings_.cable_port();
+    CableDialog dialog(CableDialog::End::kListen, offered);
+    if (dialog.ShowModal(hwnd_, IDD_CABLE) != IDOK) return;
+    settings_.SetCablePort(dialog.text());
+    SaveSettings();
+    std::wstring error;
+    if (!emulator_.CableListen(dialog.port(), error)) {
+      const std::wstring text = L"Na porte " + std::to_wstring(dialog.port()) +
+                                L" sa nedá čakať na spojenie.\r\n\r\n" + error;
+      MessageBoxW(hwnd_, text.c_str(), L"Sériový kábel", MB_OK | MB_ICONWARNING);
+    }
+    RefreshTitle();
+  });
+  OnCommand(ID_CABLE_CONNECT, [this] {
+    CableDialog dialog(CableDialog::End::kConnect, settings_.cable_address());
+    if (dialog.ShowModal(hwnd_, IDD_CABLE) != IDOK) return;
+    settings_.SetCableAddress(dialog.text());
+    SaveSettings();
+    emulator_.CableConnect(dialog.host(), dialog.port());
+    RefreshTitle();
+  });
+  OnCommand(ID_CABLE_CLOSE, [this] {
+    // Only a cable that was in says it went; unplugging a socket that was
+    // merely waiting takes nothing away from the machine.
+    const bool wasConnected = emulator_.cable_state() == TcpLink::State::kConnected;
+    emulator_.CableClose();
+    if (wasConnected) ToneCableOut();
     RefreshTitle();
   });
   OnCommand(ID_KEYBOARD_BRAILLE,
@@ -998,7 +1042,14 @@ void MainWindow::RefreshTitle() const {
   }
   // The phone line only when it is plugged in, for the same reason as the
   // lock: it changes what the machine does, and the usual case costs no word.
-  const std::wstring line = phoneLine_ ? L" — telefónna linka" : L"";
+  std::wstring line = phoneLine_ ? L" — telefónna linka" : L"";
+  // The cable likewise, only when it is anything at all.
+  switch (emulator_.cable_state()) {
+    case TcpLink::State::kIdle: break;
+    case TcpLink::State::kListening: line += L" — kábel čaká"; break;
+    case TcpLink::State::kConnecting: line += L" — kábel sa pripája"; break;
+    case TcpLink::State::kConnected: line += L" — kábel pripojený"; break;
+  }
   SetTitle(released_
                ? L"Eureka A4 — klávesnica uvoľnená — režim: " +
                      std::wstring(ModeName(emulator_.mode())) +
@@ -1066,6 +1117,14 @@ void MainWindow::RefreshMenu() const {
                  MF_BYCOMMAND | (poweredOff_ ? MF_GRAYED : MF_ENABLED));
   CheckMenuItem(menu, ID_MACHINE_PHONELINE,
                 MF_BYCOMMAND | (phoneLine_ ? MF_CHECKED : MF_UNCHECKED));
+  // One cable at a time.  Waiting or connecting while one is already in would
+  // pull it out without a word, so those two wait for Odpojiť -- which is in
+  // turn greyed when there is nothing to unplug.  None of the three has an
+  // accelerator, so greying swallows no key (see ea4-6kz above).
+  const bool cableIdle = emulator_.cable_state() == TcpLink::State::kIdle;
+  EnableMenuItem(menu, ID_CABLE_LISTEN, MF_BYCOMMAND | (cableIdle ? MF_ENABLED : MF_GRAYED));
+  EnableMenuItem(menu, ID_CABLE_CONNECT, MF_BYCOMMAND | (cableIdle ? MF_ENABLED : MF_GRAYED));
+  EnableMenuItem(menu, ID_CABLE_CLOSE, MF_BYCOMMAND | (cableIdle ? MF_GRAYED : MF_ENABLED));
   // Before RefreshShortcutText, which reads the item text back and would
   // otherwise be working on the names this is about to replace.
   RefreshSlotItems(menu);
@@ -1356,6 +1415,29 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       forceClose_ = true;
       PostMessageW(hwnd_, WM_CLOSE, 0, 0);
       return 0;
+
+    case WM_EMU_CABLE: {
+      const auto event = static_cast<TcpLink::Event>(wParam);
+      RefreshTitle();
+      RefreshMenu();
+      if (event == TcpLink::Event::kConnected) {
+        // Unless Odpojiť got there first: the message was already on its way,
+        // and a rising tone after the falling one would say the opposite of
+        // the title.
+        if (emulator_.cable_state() == TcpLink::State::kConnected) ToneCableIn();
+      } else if (event == TcpLink::Event::kLost) {
+        // Not a box: the other side going away is not something that asks
+        // for a decision.  The tone says it now and the title afterwards.
+        ToneCableOut();
+      } else {
+        // A connection the user has just asked for did not happen -- that is
+        // a box, and the reason is Windows' own, in the user's language.
+        const std::wstring text =
+            L"Spojenie s druhým emulátorom sa nepodarilo.\r\n\r\n" + emulator_.TakeCableDetail();
+        MessageBoxW(hwnd_, text.c_str(), L"Sériový kábel", MB_OK | MB_ICONWARNING);
+      }
+      return 0;
+    }
 
     case WM_EMU_NO_AUDIO:
       MessageBoxW(hwnd_,

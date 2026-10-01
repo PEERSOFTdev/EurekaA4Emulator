@@ -316,6 +316,36 @@ Nie je to skutočná linka a nikto sa neozve. Keďže tón znie stále,
 komunikačný program si na nej môže myslieť, že je spojenie. Emulátor si
 linku **nepamätá** — po každom spustení je odpojená.
 
+## Sériový kábel medzi dvoma emulátormi
+
+Dva emulátory sa dajú spojiť sériovým káblom a posielať si súbory Eurekiným
+programom Komunikácia, tak ako dve skutočné Eureky spojené káblom. Kábel ide
+cez sieť: na jednom počítači, v domácej sieti alebo cez internet pomocou VPN,
+napríklad Tailscale. Žiadny server medzi tým nie je.
+
+Jeden emulátor čaká, druhý sa k nemu pripojí:
+
+- Na prvom zvoľte **Stroj → Sériový kábel → Čakať na spojenie…** a potvrďte
+  port. Predvolený je 4161. Windows sa pri prvom čakaní môže spýtať, či
+  povoliť emulátoru prístup do siete — bez toho sa k nemu iný počítač
+  nepripojí.
+- Na druhom zvoľte **Stroj → Sériový kábel → Pripojiť sa…** a napíšte adresu
+  prvého počítača, napríklad `192.168.1.20`. Ak prvý čaká na inom porte než
+  4161, pripíšte ho za dvojbodku: `192.168.1.20:5000`. Na tom istom počítači
+  je adresa `localhost`.
+
+Keď sa kábel zapojí, zaznejú štyri rýchle stúpajúce tóny; keď sa preruší,
+štyri klesajúce. Stav stojí v titulku okna: „kábel čaká“, „kábel sa
+pripája“ alebo „kábel pripojený“. Keď druhý emulátor odíde, ten, ktorý čakal,
+čaká ďalej a dá sa k nemu znova pripojiť. Ak sa pripojenie nepodarí, emulátor
+to povie aj s dôvodom. Kábel sa vytiahne položkou **Odpojiť**.
+
+Potom sa súbor posiela ako na Eureke: na prijímajúcej strane `F4`, `F3`
+a meno súboru, na odosielajúcej `F4`, `Shift+F3` a meno súboru.
+
+Emulátor si pamätá posledný port a poslednú adresu a ponúkne ich nabudúce,
+ale sám sa nikdy nepripojí — po spustení je kábel vždy vytiahnutý.
+
 ## Výmena diskety za behu
 
 Disketa sa dá vymeniť bez toho, aby ste Eureku ukončili: ponuka
@@ -791,10 +821,10 @@ neprepísal obsah pripojeného obrazu.
   signály RTS a CTS, prerušenie od prijatého znaku;
 - stavové registre modemového kanála ASCI 0 potrebné na štart ROM.
 
-Sériový port zatiaľ nemá do čoho zapojiť kábel: v okne nie je ani tlačiareň,
-ani spojenie s druhým emulátorom, takže tlač povie „tiskárna není
-připravena“ a Komunikácia „není odezva“ — presne ako skutočná Eureka, za
-ktorou nič nevisí. Externý modem a telefónna linka tiež nemajú most na
+Do sériového portu sa dá zapojiť kábel k druhému emulátoru (viď Sériový
+kábel medzi dvoma emulátormi). Tlačiareň zatiaľ nie, takže tlač povie
+„tiskárna není připravena“ — a bez kábla Komunikácia „není odezva“ — presne
+ako skutočná Eureka, za ktorou nič nevisí. Externý modem a telefónna linka tiež nemajú most na
 zariadenia Windows; ich vstupy zostávajú v bezpečnom pokojovom stave. Jedinou
 výnimkou je vymyslená linka z ponuky Stroj (viď Telefónna linka), ktorá hlási
 oznamovací tón. Formátovanie

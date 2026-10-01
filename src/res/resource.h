@@ -17,6 +17,9 @@
 #define IDD_SPLIT            204
 #define IDD_SPLITPLAN        205
 #define IDD_SLIDERS          206
+// One template for both ends of the serial cable; the window sets the caption
+// and the label, because the two differ only in what the one field holds.
+#define IDD_CABLE            207
 
 // Menu and accelerator commands.
 #define ID_FILE_EXPORT       40001
@@ -42,6 +45,10 @@
 #define ID_MACHINE_SLIDERS   40017
 // The make-believe phone line (EurekaMachine::SetPhoneLine), a check item.
 #define ID_MACHINE_PHONELINE 40018
+// The serial cable to another emulator over TCP (TcpLink, ea4-7zw.4).
+#define ID_CABLE_LISTEN      40080
+#define ID_CABLE_CONNECT     40081
+#define ID_CABLE_CLOSE       40082
 #define ID_KEYBOARD_BRAILLE  40020
 #define ID_KEYBOARD_PC       40021
 #define ID_KEYBOARD_TOGGLE   40022
@@ -122,6 +129,10 @@
 // Sliders dialog controls.
 #define IDC_SLIDER_RATE      1060
 #define IDC_SLIDER_VOLUME    1061
+
+// Serial cable dialog controls.
+#define IDC_CABLE_LABEL      1070
+#define IDC_CABLE_TEXT       1071
 
 // Slots dialog controls.
 #define IDC_SLOT_LIST        1020

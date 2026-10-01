@@ -30,6 +30,8 @@ constexpr char kVolumeKey[] = "hlasitost";
 constexpr char kCheckUpdatesKey[] = "aktualizacie";
 constexpr char kLastUpdateCheckKey[] = "posledna-kontrola";
 constexpr char kSkippedVersionKey[] = "preskocena-verzia";
+constexpr char kCablePortKey[] = "kabel-port";
+constexpr char kCableAddressKey[] = "kabel-adresa";
 constexpr char kSlotPrefix[] = "slot";
 // A locked diskette, one per line: "zamok1=C:\Hry".  Numbered rather than
 // repeated under one key, because the parser here takes the last value for a
@@ -193,6 +195,14 @@ void Settings::Load() {
       skippedVersion_ = std::move(value);
       continue;
     }
+    if (key == kCablePortKey) {
+      cablePort_ = std::move(value);
+      continue;
+    }
+    if (key == kCableAddressKey) {
+      cableAddress_ = std::move(value);
+      continue;
+    }
     if (key == kKeyboardKey) {
       // Only the one word turns it round.  A misspelt or unknown value leaves
       // the PC keyboard rather than being guessed at: read as braille it would
@@ -267,6 +277,8 @@ bool Settings::Save(std::wstring& error) const {
     text += L"posledna-kontrola=" + lastUpdateCheck_ + L"\r\n";
   if (!skippedVersion_.empty())
     text += L"preskocena-verzia=" + skippedVersion_ + L"\r\n";
+  if (!cablePort_.empty()) text += L"kabel-port=" + cablePort_ + L"\r\n";
+  if (!cableAddress_.empty()) text += L"kabel-adresa=" + cableAddress_ + L"\r\n";
   if (!lastDisk_.empty()) text += L"posledna-disketa=" + lastDisk_ + L"\r\n";
   for (int number = 1; number <= kSlots; ++number) {
     const auto index = static_cast<std::size_t>(number - 1);

@@ -130,6 +130,47 @@ void UpdateKeysRoundTrip() {
   }
 }
 
+// The serial cable's last answers (ea4-7zw.4).  An address carries colons and
+// brackets, and a host name can carry diacritics; all of it has to come back
+// as typed, or the dialog offers something the user never wrote.
+void CableAnswersRoundTrip() {
+  {
+    Settings settings(FileNamed("neexistuje.txt"));
+    settings.Load();
+    Check(settings.cable_port().empty() && settings.cable_address().empty(),
+          "chybajuci subor: kabel bez predvyplnenia");
+  }
+  const fs::path file = FileNamed("kabel.txt");
+  std::wstring error;
+  {
+    Settings settings(file);
+    settings.SetCablePort(L"5000");
+    settings.SetCableAddress(L"[fd7a:115c::1]:4200");
+    Check(settings.Save(error), "ulozenie kabla prejde", Narrow(error));
+  }
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(loaded.cable_port() == L"5000", "port kabla prezije");
+    Check(loaded.cable_address() == L"[fd7a:115c::1]:4200",
+          "adresa s dvojbodkami a zatvorkami prezije");
+  }
+  {
+    Settings settings(file);
+    settings.Load();
+    settings.SetCableAddress(L"počítač.local:4161");
+    settings.SetCablePort(L"");
+    settings.Save(error);
+  }
+  {
+    Settings loaded(file);
+    loaded.Load();
+    Check(loaded.cable_address() == L"počítač.local:4161", "adresa s diakritikou prezije");
+    Check(loaded.cable_port().empty() && ReadRaw(file).find("kabel-port") == std::string::npos,
+          "zruseny port zo suboru zmizne");
+  }
+}
+
 void KeepRamSwitchRoundTrips() {
   // Absent from the file means on: a settings file from a version that never
   // knew the switch must not silently stop keeping the RAM (ea4-dh1).
@@ -635,6 +676,7 @@ int main() {
   KeepRamSwitchRoundTrips();
   ExtraRamSwitchRoundTrips();
   UpdateKeysRoundTrip();
+  CableAnswersRoundTrip();
   KeyboardModeRoundTrips();
   SlidersRoundTrip();
   SliderPositionsMapToTheHardware();

@@ -56,6 +56,32 @@ class SlidersDialog : public win::Dialog {
   int volume_;
 };
 
+// One end of the serial cable to another emulator (ea4-7zw.4): the port to
+// wait on, or the address to connect to.  OK only with an answer that parses,
+// so the caller gets a host and a port it can use straight away, and the text
+// as typed, which is what the settings remember.
+class CableDialog : public win::Dialog {
+ public:
+  enum class End { kListen, kConnect };
+
+  CableDialog(End end, std::wstring text) : end_(end), text_(std::move(text)) {}
+
+  const std::wstring& text() const { return text_; }
+  // Empty for kListen.
+  const std::wstring& host() const { return host_; }
+  uint16_t port() const { return port_; }
+
+ protected:
+  bool OnInit() override;
+  bool OnOk() override;
+
+ private:
+  End end_;
+  std::wstring text_;
+  std::wstring host_;
+  uint16_t port_ = TcpLink::kDefaultPort;
+};
+
 // The nine quick-choice slots as the dialogs pass them around.
 using SlotList = std::array<std::wstring, Settings::kSlots>;
 

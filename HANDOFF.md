@@ -4045,6 +4045,25 @@ CTS1E v STAT1 (ROM ho nezapína) a kanál 0. Okno doň zatiaľ nič nezapája;
 drží ho len `integration_test tlac` a `kabel` (overené mutáciou, viď
 `tests/README.md`). Ďalší krok je kábel cez TCP, `ea4-7zw.4`.
 
+**Kábel cez TCP, 1. 10. 2026 (`ea4-7zw.4`).** Veta „okno doň zatiaľ nič
+nezapája“ už neplatí: `EmulatorThread` zapojí do zásuvky `TcpLink`
+(`src/tcp_link.*`) a ovláda sa z ponuky **Stroj → Sériový kábel** (čakať na
+porte, predvolene 4161, alebo sa pripojiť na adresu). Rozhodnuté s majiteľom
+v poznámkach beadu: posledný port a adresa sa pamätajú v `nastavenia.txt`
+(`kabel-port=`, `kabel-adresa=`), sám sa nepripája nikdy; spojenie a strata sú
+štyri stúpajúce a štyri klesajúce tóny hostiteľa a stav v titulku, bez
+`MessageBox` — ten je len pri zlyhanom pripojení, ktoré si používateľ vyžiadal.
+
+Na drôte je RTS v tom istom prúde ako dáta (`FF 00`/`FF 01`, `FF FF` je bajt
+`FFh`), takže zmena RTS nepredbehne bajt poslaný pred ňou. Každý stroj beží
+v reálnom čase a socket nič netaktuje: vysielajúci stroj už znaky rozostupuje
+časom znaku a prijímajúci ich berie, keď má voľný RDR. Čakajúca strana po
+strate čaká ďalej, pripájajúca sa nepripája znova, tretí emulátor sa odmietne.
+`Close()` vyhľadávanie mena ruší (`GetAddrInfoExCancel`), lebo ho volá okno.
+Drží to `link_test` (bajty, RTS, strata, odmietnutie, adresa) a druhá polovica
+`integration_test kabel` (XMODEM cez dva `TcpLink` na `127.0.0.1`, overené
+mutáciou). Skúška dvoch okien rukou zostáva na majiteľovi.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.

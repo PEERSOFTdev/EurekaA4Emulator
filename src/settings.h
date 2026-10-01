@@ -122,6 +122,16 @@ class Settings {
     skippedVersion_ = std::move(version);
   }
 
+  // The serial cable's last answers as the user typed them, so its dialog can
+  // offer them again: the port waited on, and the address connected to.  Text
+  // and not numbers, because the dialog is what decides whether they make
+  // sense; empty means it offers its own default.  Nothing connects by itself
+  // at start-up -- these only fill the field.
+  const std::wstring& cable_port() const { return cablePort_; }
+  void SetCablePort(std::wstring port) { cablePort_ = std::move(port); }
+  const std::wstring& cable_address() const { return cableAddress_; }
+  void SetCableAddress(std::wstring address) { cableAddress_ = std::move(address); }
+
   // An out-of-range number reads empty and writes nowhere, so a caller that
   // miscounts cannot corrupt the file or walk off the array.
   const std::wstring& slot(int number) const;
@@ -160,6 +170,8 @@ class Settings {
   bool checkUpdates_ = true;
   std::wstring lastUpdateCheck_;
   std::wstring skippedVersion_;
+  std::wstring cablePort_;
+  std::wstring cableAddress_;
   std::array<std::wstring, kSlots> slots_;
   // In the order they were locked, so the file stays diffable and a lock the
   // user set is not silently reordered under them.
