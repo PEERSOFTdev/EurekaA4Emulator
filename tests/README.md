@@ -41,6 +41,16 @@ read from `SHA256SUMS.txt`, and when an update is offered (never by a
 development build, never the skipped version, again for one newer than it).
 No ROM, no network, no files.
 
+`link_test.cpp` covers the serial cable between two emulators over TCP
+(`src/tcp_link.*`), with two links on 127.0.0.1 and no machine. A machine
+cannot tell a broken cable from a silent one, so this holds what it would
+otherwise never notice: every byte arrives once and in order, `FFh` included,
+which the wire uses as its escape; RTS reaches the far side as CTS and never
+overtakes a byte sent before it; a lost cable is reported and leaves CTS
+dropped; a third emulator is turned away without breaking the first two; and
+the address typed by the user is parsed the same way the dialog will. No ROM,
+loopback only, every port from `Listen(0)`.
+
 `disk_test.cpp` covers the diskette model: capacity, naming, swapping, the
 unformatted state, and what a file looks like on its way back to the host.
 Everything it needs it makes for itself in the system temp folder, because a

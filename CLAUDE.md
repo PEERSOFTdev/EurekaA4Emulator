@@ -227,7 +227,7 @@ slučka, `NVDA+Ctrl+F3` ho načíta znovu. Pozor, v scratchpade nefunguje
 
 Sonda a testy: `build-tests.bat`. Zostaví `bin\diag_probe.exe`,
 `bin\integration_test.exe`, `bin\codec_test.exe`, `bin\disk_test.exe`,
-`bin\settings_test.exe` a `bin\update_test.exe`, a linkuje ich proti objektom z `build\`. Zostaví aj `bin\zex_test.exe`, ktorý
+`bin\settings_test.exe`, `bin\update_test.exe` a `bin\link_test.exe`, a linkuje ich proti objektom z `build\`. Zostaví aj `bin\zex_test.exe`, ktorý
 púšťa ZEXDOC na holom jadre; program je mimo repozitára
 v `C:\b\z80-tests`, preto nie je v `run-tests.bat` (`tests/README.md`,
 HANDOFF 6.33 bod 8). Keď siahneš na `z80.c`, pusti ho — trvá dve minúty.
@@ -418,9 +418,20 @@ sú v `sliders.h` a nikde inde** — pýta sa ich stroj, nastavenia, dialóg aj
 sonda. Doplnok NVDA má počty polôh napevno, takže zmena rozsahu patrí aj doň.
 Skutočný súbor nastavení na to nepoužívaj — patrí tomu, kto testy spúšťa.
 
+`link_test` drží **sériový kábel medzi emulátormi cez TCP** (`src/tcp_link.*`,
+`ea4-7zw.4`) — dva konce na `127.0.0.1`, bez ROM a bez stroja, porty z
+`Listen(0)`. Stroj pokazený kábel od tichého nerozozná, takže test drží presne
+to, čo by inak nikto nespozoroval: každý bajt príde raz a v poradí, aj `FFh`,
+ktorým sa na drôte escapuje; RTS dôjde na druhú stranu ako CTS a **nepredbehne
+bajty poslané pred ním** (ide v tom istom prúde); strata kábla sa ohlási a CTS
+po nej nevisí; tretí emulátor sa odmietne bez toho, aby prvým dvom spadol
+kábel; a adresa sa rozoberie tak, ako ju napíše používateľ. Overené mutáciou:
+vynechané escapovanie `FFh` zhodí tri kontroly. Vynechané nulovanie CTS po
+strate nezhodí nič a je to správne — `ClearToSend` sa pýta aj na stav spojenia.
+
 ## Spustenie testov
 
-`run-tests.bat` zostaví testy a pustí všetkých dvadsaťdva naraz — štyri
+`run-tests.bat` zostaví testy a pustí všetkých dvadsaťtri naraz — päť
 samostatné testy a osemnásť režimov `integration_test`. Sú to nezávislé
 procesy, nič nezdieľajú. Priečinok diskety si vyrobí čerstvý v
 `build\testdisk` a skopíruje doň `TECHMAN1\READ.COM` z manuálu, bez
@@ -460,7 +471,7 @@ tri `PASS` a dvanásť zlyhaní, ktoré vyzerali ako chyba emulátora, hoci to
 bola pokazená cesta. Keď na `to_unix` v `run-tests.sh` siahneš, drž sa
 tvaru cesty.
 
-**Keď manuál nie je po ruke, je `PASS` dvadsať a nie je to regresia.**
+**Keď manuál nie je po ruke, je `PASS` dvadsaťjeden a nie je to regresia.**
 Dávka vynechá cez `SKIP_MODES` režimy `com` **aj `wp`** a napíše, prečo.
 Že sú to dva a nie jeden, ukázalo až meranie 20. 9. 2026: `wp` spúšťa ten
 istý `READ.COM` a overuje ním, že z chránenej diskety sa dá čítať
@@ -469,7 +480,7 @@ Odhad hovoril, že ide len o `com`. Zoznam režimov je len v `Makefile`
 (`ALL_MODES`), aby sa druhá kópia nemala ako rozísť.
 
 Výstup drží pohromade `--output-sync=target`; bez neho sa riadky dvadsiatich
-dvoch procesov premiešajú. `-k` nechá dobehnúť aj zvyšok po prvom zlyhaní.
+troch procesov premiešajú. `-k` nechá dobehnúť aj zvyšok po prvom zlyhaní.
 
 **Pasca, do ktorej som už spadol:** režimy sa v `Makefile` generujú ako
 výslovné pravidlá cez `foreach`/`eval`. Vzorové pravidlo `check-%` tam
@@ -477,7 +488,7 @@ najprv bolo a bolo tiché — `make` implicitné ani vzorové pravidlá na
 `.PHONY` cieľoch nehľadá, takže všetky režimy zostali bez receptu, make ich
 vyhlásil za splnené a `run-tests.bat` ohlásil úspech bez toho, aby čokoľvek
 z nich bežalo. Keď na tú časť siahneš, over počet riadkov `PASS` — musí ich
-byť dvadsaťdva, alebo dvadsať bez manuálu — a raz to skús s nezmyselnou ROM
+byť dvadsaťtri, alebo dvadsaťjeden bez manuálu — a raz to skús s nezmyselnou ROM
 aj s nezmyselným `EUREKATECH`, či poistky naozaj zvonia.
 
 ## Diagnostická sonda
@@ -974,7 +985,7 @@ toto je jedno z miest, ktoré by ho zaseklo.
 Kým toto neplatí, nehlás hotovo — a nehlás ani „malo by to fungovať“:
 
 1. `build.bat` prejde bez jediného varovania.
-2. `run-tests.bat` dá **dvadsaťdva** riadkov `PASS` — alebo dvadsať, keď na
+2. `run-tests.bat` dá **dvadsaťtri** riadkov `PASS` — alebo dvadsaťjeden, keď na
    stroji nie je Technical Manual a dávka to ohlási. Že sa to preložilo, nie je
    výsledok merania.
 3. Dokumentácia dobehla **v tom istom kroku**, nie „potom“. README, keď sa

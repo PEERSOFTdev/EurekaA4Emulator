@@ -1,5 +1,5 @@
 #!/bin/sh
-# Zostaví testy a pustí všetkých dvadsaťdva naraz. Náprotivok run-tests.bat.
+# Zostaví testy a pustí všetkých dvadsaťtri naraz. Náprotivok run-tests.bat.
 #
 # Volanie:  ./run-tests.sh                (ROM z premennej A4ROM)
 #           ./run-tests.sh /cesta/k/a4rom.dmp
@@ -129,7 +129,7 @@ else
   echo "Nenašiel som \$EUREKATECH/TECHMAN1/READ.COM, preskakujem com a wp."
   echo "Je to súbor z Technical Manuálu, ktorý leží mimo repozitára."
   echo "Cestu k priečinku zadajte premennou EUREKATECH."
-  echo "Testov bude dvadsať a nie je to regresia."
+  echo "Testov bude dvadsaťjeden a nie je to regresia."
   SKIP_MODES="com wp"
 fi
 export SKIP_MODES

@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-rem Zostavi testy a pusti vsetkych dvadsatdva naraz. Su to samostatne procesy,
+rem Zostavi testy a pusti vsetkych dvadsattri naraz. Su to samostatne procesy,
 rem nic nezdielaju, takze paralelne bezia bez rizika. Wall time urcuje
 rem najdlhsi z nich -- rezim kbd.
 rem
@@ -11,7 +11,7 @@ rem           run-tests.bat C:\cesta\a4rom.dmp
 rem
 rem Technical Manual sa hlada v %EUREKATECH%, inak v C:\b\eurekatech. Je to
 rem material tretich stran a v repozitari nie je -- vid ROM-NOTICE.txt. Bez
-rem neho sa preskocia rezimy com a wp a testov je dvadsat, nie dvadsatdva.
+rem neho sa preskocia rezimy com a wp a testov je dvadsatjeden, nie dvadsattri.
 
 if "%MINGW64%"=="" set "MINGW64=C:\msys64\mingw64"
 set "PATH=%MINGW64%\bin;%PATH%"

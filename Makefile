@@ -96,7 +96,7 @@ SESSION_OBJS := $(BUILD)/test_eureka_session.o
 EMU        := $(BIN)/EurekaA4Emulator.exe
 TEST_EXES  := $(BIN)/codec_test.exe $(BIN)/disk_test.exe \
               $(BIN)/settings_test.exe $(BIN)/update_test.exe \
-              $(BIN)/zex_test.exe \
+              $(BIN)/link_test.exe $(BIN)/zex_test.exe \
               $(BIN)/diag_probe.exe $(BIN)/integration_test.exe
 
 .PHONY: all tests check clean
@@ -179,6 +179,11 @@ $(BIN)/update_test.exe: $(BUILD)/test_update_test.o $(BUILD)/version.o \
                        $(BUILD)/update.o | $(BIN)
 	$(CXX) $(STATIC) -o $@ $^
 
+# Seriovy kabel cez TCP, dva konce na 127.0.0.1, bez ROM a bez stroja.
+# Obycajny main.
+$(BIN)/link_test.exe: $(BUILD)/test_link_test.o $(BUILD)/tcp_link.o | $(BIN)
+	$(CXX) $(STATIC) -o $@ $^ -lws2_32
+
 # Hole jadro bez stroja; ZEXDOC nie je v repozitari, preto nie je ani
 # medzi check-* (ea4-z8y). Obycajny main, teda bez -municode.
 $(BIN)/zex_test.exe: $(BUILD)/test_zex_test.o $(BUILD)/z80.o | $(BIN)
@@ -201,7 +206,7 @@ $(BIN)/integration_test.exe: $(BUILD)/test_integration_test.o $(SESSION_OBJS) $(
 # Manual je material tretich stran a v repozitari nie je (ROM-NOTICE.txt).
 # Ked ho run-tests.bat nenajde, nastavi v PROSTREDI SKIP_MODES na `com wp` --
 # READ.COM potrebuju oba, `wp` nim overuje citanie z chranenej diskety.
-# Testov je potom patnast, nie sedemnast. Prostredim a nie argumentom preto,
+# Testov je potom dvadsatjeden, nie dvadsattri. Prostredim a nie argumentom preto,
 # ze su to dve slova a make by to druhe vzal ako dalsi ciel.
 #
 # Zoznam rezimov je len tu. Druha kopia inde by sa s touto rozisla potichu.
@@ -212,7 +217,7 @@ DISK  ?= $(BUILD)/testdisk
 
 ALL_MODES := bas com kbd power dc rtc hudba zvuk format wp hlaseni snimka akord budik trap session tlac kabel
 MODES  := $(filter-out $(SKIP_MODES),$(ALL_MODES))
-CHECKS := check-codec check-disk check-settings check-update \
+CHECKS := check-codec check-disk check-settings check-update check-link \
           $(addprefix check-,$(MODES))
 
 .PHONY: $(CHECKS)
@@ -230,6 +235,9 @@ check-settings: $(BIN)/settings_test.exe
 
 check-update: $(BIN)/update_test.exe
 	$(BIN)/update_test.exe
+
+check-link: $(BIN)/link_test.exe
+	$(BIN)/link_test.exe
 
 # Rezimy integracneho testu sa generuju ako VYSLOVNE pravidla. Vzorove
 # pravidlo `check-%` tu bolo a bola to ticha pasca: make implicitne ani
