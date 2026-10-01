@@ -1042,9 +1042,14 @@ veci, ktorá má viac krokov — vtedy až po poslednom z nich.
 
 Vydanie **nespúšťaj sám**. Je verejné a ponúkne sa každému používateľovi, takže
 rozhoduje majiteľ. Spúšťa sa `./release` (skript pre bash v koreni, bez
-prípony, preto má v `.gitattributes` vlastné pravidlo LF): pushne, počká na
-„Zostavenie“ toho commitu, spustí `vydanie.yml`, počká naň a vypíše adresu.
-Číslo si workflow dopočíta sám (epic `ea4-hg9`). Priebeh vypisuje po riadkoch
+prípony, preto má v `.gitattributes` vlastné pravidlo LF): pushne, spustí
+`vydanie.yml`, počká naň a vypíše adresu. Číslo si workflow dopočíta sám (epic
+`ea4-hg9`). Na „Zostavenie“ spustené pushom **nečaká** (od 1. 10. 2026):
+`vydanie.yml` volá ten istý `zostavenie.yml` znova so značkou a zverejnenie má
+`needs` na jeho úspech, takže zlyhaný preklad či test vydanie zastaví aj tak.
+Artefakt z pushu sa použiť nedá — EXE v ňom nesie vývojovú verziu, nie číslo
+vydania. Testy s ROM nepúšťa ani CI, ani skript; stoja na „Čo znamená hotovo“
+pred commitom. Priebeh vypisuje po riadkoch
 len pri zmene a nie cez `gh run watch` — ten prekresľuje obrazovku, čítačka by
 čítala dookola to isté, a bez čísla behu sa pýta, ktorý sledovať. Keď v
 skripte meníš sledovanie, over ho na už skončenom behu (`source ./release`

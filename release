@@ -2,8 +2,13 @@
 # Vydanie jedným príkazom:  ./release
 #
 # 1. git push -- neškodný, keď nie je čo pushnúť.
-# 2. Počká na "Zostavenie" pushnutého commitu; keď zlyhá, vydanie sa nerobí.
-# 3. Spustí vydanie.yml, počká naň a vypíše adresu vydania.
+# 2. Spustí vydanie.yml, počká naň a vypíše adresu vydania.
+#
+# Na "Zostavenie", ktoré spustil push, sa nečaká: vydanie.yml volá ten istý
+# zostavenie.yml znova (so značkou, ktorú EXE musí niesť), a keď v ňom preklad
+# alebo test zlyhá, zverejnenie sa nespustí a nevznikne ani značka. Čakanie by
+# len zopakovalo tú istú kontrolu pred ňou. Zostavenie po pushi beží súbežne
+# na vlastnom stroji ďalej ako bežná kontrola commitu.
 #
 # Priebeh ide na konzolu RIADOK PO RIADKU a len pri zmene -- dokončený krok,
 # výsledok. Nie cez `gh run watch`: ten obrazovku stále prekresľuje, takže
@@ -102,26 +107,17 @@ main() {
     say 'Pozor: v pracovnom strome sú necommitnuté zmeny. Do vydania nepôjdu.'
 
   # --- 1. Push ----------------------------------------------------------------
-  say '1/3 Push'
+  say '1/2 Push'
   git push || fail 'git push neprešiel.'
   SHA=$(git rev-parse HEAD)
   local short=${SHA:0:7} released
   # Ten istý commit dvakrát vydaný nebude; vydanie.yml by to odmietlo tiež, ale
-  # až po minúte a pol čakania na zostavenie.
+  # až keď sa preň nájde stroj a stiahne zdrojáky.
   released=$(git ls-remote --tags origin 'v[0-9]*' | grep "^$SHA" | sed 's#.*refs/tags/##')
   [[ -z "$released" ]] || fail "commit $short už vydaný je: $released."
 
-  # --- 2. Zostavenie ----------------------------------------------------------
-  say "2/3 Zostavenie commitu $short"
-  local build
-  build=$(find_run zostavenie.yml push)
-  [[ -n "$build" ]] || fail "k commitu $short sa nenašlo zostavenie."
-  watch_run "$build"
-  [[ "$RESULT" == success ]] || fail "zostavenie skončilo: $RESULT. Vydanie sa nerobí."
-  say '  Zostavenie prešlo.'
-
-  # --- 3. Vydanie -------------------------------------------------------------
-  say '3/3 Vydanie'
+  # --- 2. Vydanie -------------------------------------------------------------
+  say "2/2 Vydanie commitu $short"
   local started release
   started=$(date -u -d '-10 seconds' +%Y-%m-%dT%H:%M:%SZ)
   gh workflow run vydanie.yml --ref main || fail 'vydanie sa nepodarilo spustiť.'
