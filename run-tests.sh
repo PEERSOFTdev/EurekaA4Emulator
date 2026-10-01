@@ -73,6 +73,14 @@ fi
 # čítať ako rozdiel v tom, čo sa meria. Windows lomku dopredu prijíma.
 ROM_WIN="$(wslpath -w "$A4ROM" | tr '\\' '/')"
 
+# Značka pre ./release, to isté čo v run-tests.bat: hash stromu, ktorý sa ide
+# testovať, aj s necommitnutými zmenami, cez dočasný index a hneď teraz.
+# Stará značka ide preč, aby neprežila zlyhaný beh toho istého stromu.
+rm -f build/otestovany-strom
+mkdir -p build
+TESTED_TREE="$(GIT_INDEX_FILE=build/otestovany-index \
+  sh -c 'git read-tree HEAD && git add -A && git write-tree' 2>/dev/null || true)"
+
 ./build-tests.sh
 
 # Vlastný priečinok diskety, čerstvý pri každom spustení. Skutočný disk sa
@@ -149,6 +157,10 @@ if make -j"$JOBS" -k --output-sync=target \
      ROM="$ROM_WIN" \
      DISK="$TESTDISK_MAKE" \
      check; then
+  # Značka len za všetkých dvadsaťtri -- bez manuálu beh úplný nie je.
+  if [ -z "$SKIP_MODES" ] && [ -n "$TESTED_TREE" ]; then
+    printf '%s\n' "$TESTED_TREE" > build/otestovany-strom
+  fi
   echo
   echo "VÝSLEDOK: všetky testy prešli."
 else

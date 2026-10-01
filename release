@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Vydanie jedným príkazom:  ./release
 #
+# 0. Overí, že run-tests prešiel na presne tom obsahu, ktorý má HEAD;
+#    keď nie, spýta sa, či vydať aj tak.
 # 1. git push -- neškodný, keď nie je čo pushnúť.
 # 2. Spustí vydanie.yml, počká naň a vypíše adresu vydania.
 #
@@ -105,6 +107,29 @@ main() {
   # ale kto ich tu má, mohol by si myslieť, že v ňom sú.
   [[ -z "$(git status --porcelain)" ]] ||
     say 'Pozor: v pracovnom strome sú necommitnuté zmeny. Do vydania nepôjdu.'
+
+  # Testy s ROM nepúšťa CI ani tento skript; stoja na tom, že run-tests pred
+  # commitom prešiel. Ten zapíše hash stromu, ktorý testoval, a tu sa porovná
+  # so stromom HEAD -- nie s commitom, lebo testuje sa pred ním. Nesedí, keď
+  # sa po testoch ešte niečo zmenilo, keď niektorý zlyhal alebo keď bežal bez
+  # manuálu. Je to otázka, nie zákaz: rozhoduje majiteľ.
+  local tested
+  # 2>/dev/null pred <, inak chýbajúci súbor ohlási bash sám.
+  tested=$(tr -d '\r\n ' 2>/dev/null < build/otestovany-strom)
+  if [[ "$tested" != "$(git rev-parse 'HEAD^{tree}')" ]]; then
+    if [[ -z "$tested" ]]; then
+      say 'Pozor: nenašiel som záznam o úspešnom behu run-tests.'
+    else
+      say 'Pozor: run-tests naposledy prešiel na inom obsahu, než má HEAD.'
+    fi
+    say 'Testy s ROM teda pre toto vydanie overené nie sú.'
+    local answer=''
+    read -r -p 'Vydať aj tak? Napíšte a, inak sa končí: ' answer || true
+    if [[ "$answer" != a ]]; then
+      say 'Vydanie sa nerobí.'
+      exit 1
+    fi
+  fi
 
   # --- 1. Push ----------------------------------------------------------------
   say '1/2 Push'

@@ -446,7 +446,9 @@ samostatné testy a osemnásť režimov `integration_test`. Sú to nezávislé
 procesy, nič nezdieľajú. Priečinok diskety si vyrobí čerstvý v
 `build\testdisk` a skopíruje doň `TECHMAN1\READ.COM` z manuálu, bez
 ktorého režim `com` zlyhá. ROM berie z argumentu, inak z `%A4ROM%`, inak
-`C:\b\a4rom.dmp`; manuál z `%EUREKATECH%`, inak `C:\b\eurekatech`.
+`C:\b\a4rom.dmp`; manuál z `%EUREKATECH%`, inak `C:\b\eurekatech`. Po
+úspechu všetkých dvadsiatich troch zapíše `build\otestovany-strom`, na ktorý
+sa pýta `./release` (viď `### Vydanie navrhni`); bez manuálu ho nezapíše.
 
 Vo WSL robí to isté `run-tests.sh` a líši sa v troch veciach, všetky
 odmerané 21. 9. 2026. ROM **musí** byť zadaná — záložná cesta z jedného
@@ -1049,7 +1051,14 @@ prípony, preto má v `.gitattributes` vlastné pravidlo LF): pushne, spustí
 `needs` na jeho úspech, takže zlyhaný preklad či test vydanie zastaví aj tak.
 Artefakt z pushu sa použiť nedá — EXE v ňom nesie vývojovú verziu, nie číslo
 vydania. Testy s ROM nepúšťa ani CI, ani skript; stoja na „Čo znamená hotovo“
-pred commitom. Priebeh vypisuje po riadkoch
+pred commitom. Skript sa preto pred pushom pozrie do `build\otestovany-strom`:
+`run-tests` doň po úspešnom behu všetkých dvadsiatich troch zapíše hash
+stromu, ktorý testoval, a `./release` ho porovná so stromom `HEAD`. Keď
+nesedí alebo chýba, spýta sa, či vydať aj tak. Je to hash **obsahu**, nie
+commitu, lebo testuje sa pred commitom; počíta sa cez dočasný index
+(`build\otestovany-index`) na **začiatku** behu, nie na konci, a skutočného
+indexu sa nedotkne. Overené 1. 10. 2026: značka sa rovnala stromu z
+`git stash create` necommitnutých zmien. Priebeh vypisuje po riadkoch
 len pri zmene a nie cez `gh run watch` — ten prekresľuje obrazovku, čítačka by
 čítala dookola to isté, a bez čísla behu sa pýta, ktorý sledovať. Keď v
 skripte meníš sledovanie, over ho na už skončenom behu (`source ./release`

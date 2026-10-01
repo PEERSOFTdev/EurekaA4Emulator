@@ -24,6 +24,19 @@ if not exist "%A4ROM%" (
   exit /b 1
 )
 
+rem Znacka pre ./release: hash stromu, ktory sa ide testovat, aj s
+rem necommitnutymi zmenami -- testuje sa pred commitom, takze hash commitu by
+rem nesedel nikdy. Pocita sa cez docasny index, skutocneho sa nedotkne, a
+rem TERAZ, nie na konci: co sa zmeni pocas behu, to sa netestovalo. Stara
+rem znacka ide prec hned, aby neprezila zlyhany beh toho isteho stromu.
+rem Bez gitu (zdrojaky zo ZIP-u) vyjde prazdna a znacka nevznikne.
+set "TESTED_TREE="
+if exist "%~dp0build\otestovany-strom" del "%~dp0build\otestovany-strom"
+if not exist "%~dp0build" mkdir "%~dp0build"
+set "GIT_INDEX_FILE=%~dp0build\otestovany-index"
+git read-tree HEAD >nul 2>&1 && git add -A >nul 2>&1 && for /f %%h in ('git write-tree 2^>nul') do set "TESTED_TREE=%%h"
+set "GIT_INDEX_FILE="
+
 call "%~dp0build-tests.bat"
 if errorlevel 1 exit /b 1
 
@@ -73,6 +86,9 @@ if errorlevel 1 (
   echo VYSLEDOK: niektore testy ZLYHALI, viz riadky vyssie.
   exit /b 1
 )
+
+rem Znacka len za vsetkych dvadsattri -- bez manualu beh uplny nie je.
+if "%SKIP_MODES%"=="" if not "%TESTED_TREE%"=="" >"%~dp0build\otestovany-strom" echo %TESTED_TREE%
 
 echo.
 echo VYSLEDOK: vsetky testy presli.
