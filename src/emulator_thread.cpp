@@ -402,6 +402,14 @@ void EmulatorThread::Start(std::unique_ptr<EurekaMachine> machine, HWND notify,
                            InputMode startMode, bool diagnostics) {
   machine_ = std::move(machine);
   notify_ = notify;
+  cable_.SetListener([this, notify](TcpLink::Event event, const std::wstring& detail) {
+    {
+      std::lock_guard<std::mutex> lock(cableMutex_);
+      cableDetail_ = detail;
+    }
+    if (notify) PostMessageW(notify, WM_EMU_CABLE, static_cast<WPARAM>(event), 0);
+  });
+  machine_->SetSerialLink(&cable_);
   mode_.store(startMode, std::memory_order_relaxed);
   diagnostics_.store(diagnostics, std::memory_order_relaxed);
   running_.store(true, std::memory_order_relaxed);
@@ -415,6 +423,9 @@ std::unique_ptr<EurekaMachine> EmulatorThread::Stop() {
     thread_.join();
   }
   running_.store(false, std::memory_order_relaxed);
+  // The machine outlives this object in the caller's hands; the cable does
+  // not.
+  if (machine_) machine_->SetSerialLink(nullptr);
   return std::move(machine_);
 }
 
@@ -588,6 +599,11 @@ DiskChange EmulatorThread::TakeDiskChange() {
 std::wstring EmulatorThread::TakeDiskError() {
   std::lock_guard<std::mutex> lock(errorMutex_);
   return std::move(diskError_);
+}
+
+std::wstring EmulatorThread::TakeCableDetail() {
+  std::lock_guard<std::mutex> lock(cableMutex_);
+  return std::move(cableDetail_);
 }
 
 SaveResult EmulatorThread::TakeSaveResult() {

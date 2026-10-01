@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <ctime>
@@ -11,12 +12,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "eureka_io.h"
 #include "eureka_session.h"
 #include "machine.h"
 #include "md5.h"
+#include "tcp_link.h"
 
 namespace {
 
@@ -2751,10 +2754,17 @@ bool CheckPrinter(EurekaMachine& machine) {
 // sends a file with XMODEM, the other receives it, and the file that lands
 // must be the one that left.  1340 bytes is eleven blocks, the last one padded
 // with 1Ah, so the checksums, the ACKs, the padding and EOT all take part.
-bool CheckCable(const wchar_t* romPath) {
+//
+// overTcp puts the same transfer through two TcpLinks on 127.0.0.1 instead of
+// the cable in memory (ea4-7zw.4): link_test holds the bytes, this holds that
+// Komunikace still gets through when they arrive on another thread, a little
+// later than the machine expected them.
+bool CheckCable(const wchar_t* romPath, bool overTcp) {
   using namespace eureka;
+  using namespace std::chrono_literals;
   std::error_code ec;
-  const fs::path root = fs::temp_directory_path(ec) / L"ea4_kabel";
+  const fs::path root =
+      fs::temp_directory_path(ec) / (overTcp ? L"ea4_kabel_tcp" : L"ea4_kabel");
   fs::remove_all(root, ec);
   fs::create_directories(root / L"a", ec);
   fs::create_directories(root / L"b", ec);
@@ -2778,10 +2788,31 @@ bool CheckCable(const wchar_t* romPath) {
   }
   CableEnd senderEnd(*sender);
   CableEnd receiverEnd(*receiver);
-  senderEnd.peer = &receiverEnd;
-  receiverEnd.peer = &senderEnd;
-  sender->SetSerialLink(&senderEnd);
-  receiver->SetSerialLink(&receiverEnd);
+  TcpLink senderSocket;
+  TcpLink receiverSocket;
+  if (overTcp) {
+    if (!receiverSocket.Listen(0, error)) {
+      std::wcout << L"  " << error << L"\n";
+      return false;
+    }
+    senderSocket.Connect(L"127.0.0.1", receiverSocket.port());
+    const auto deadline = std::chrono::steady_clock::now() + 5s;
+    while (senderSocket.state() != TcpLink::State::kConnected ||
+           receiverSocket.state() != TcpLink::State::kConnected) {
+      if (std::chrono::steady_clock::now() > deadline) {
+        std::cout << "  socket sa nespojil\n";
+        return false;
+      }
+      std::this_thread::sleep_for(1ms);
+    }
+    sender->SetSerialLink(&senderSocket);
+    receiver->SetSerialLink(&receiverSocket);
+  } else {
+    senderEnd.peer = &receiverEnd;
+    receiverEnd.peer = &senderEnd;
+    sender->SetSerialLink(&senderEnd);
+    receiver->SetSerialLink(&receiverEnd);
+  }
 
   Session a(*sender);
   Session b(*receiver);
@@ -2874,9 +2905,12 @@ int wmain(int argc, wchar_t** argv) {
   // Two machines of its own on diskettes of its own; the shared one is not
   // touched, so the other modes running beside it cannot see this one.
   if (std::wstring(argv[3]) == L"kabel") {
-    const bool passed = CheckCable(argv[1]);
-    std::cout << (passed ? "PASS" : "FAIL") << " mode=KABEL\n";
-    return passed ? 0 : 1;
+    const bool inMemory = CheckCable(argv[1], false);
+    const bool overTcp = CheckCable(argv[1], true);
+    std::cout << (inMemory && overTcp ? "PASS" : "FAIL")
+              << " mode=KABEL pamat=" << (inMemory ? "ok" : "chyba")
+              << " tcp=" << (overTcp ? "ok" : "chyba") << "\n";
+    return inMemory && overTcp ? 0 : 1;
   }
   const bool basic = std::wstring(argv[3]) == L"bas";
   auto machine = std::make_unique<EurekaMachine>();

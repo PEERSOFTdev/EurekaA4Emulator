@@ -243,6 +243,20 @@ void Failures() {
   nameless.Connect(L"neexistuje.invalid", TcpLink::kDefaultPort);
   Check(WaitUntil([&] { return heardNameless.Count(Event::kFailed) == 1; }, 15s),
         "neexistujuce meno je zlyhanie");
+
+  // An address where nothing answers at all: the attempt would run for ten
+  // seconds, and unplugging must not wait for them -- the window does it.
+  TcpLink hanging;
+  Recorder heardHanging(hanging);
+  hanging.Connect(L"10.255.255.1", TcpLink::kDefaultPort);
+  std::this_thread::sleep_for(200ms);
+  const auto start = std::chrono::steady_clock::now();
+  hanging.Close();
+  const auto took = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - start);
+  Check(took < 1s, "odpojenie pocas pripajania necaka (" + std::to_string(took.count()) +
+                       " ms)");
+  Check(heardHanging.Count(Event::kFailed) == 0, "zrusene pripajanie sa nehlasi ako zlyhanie");
 }
 
 }  // namespace

@@ -78,7 +78,7 @@ endif
 EMU_NAMES  := main machine md5 virtual_disk cpm_disk disk_stash disk_layout \
               disk_split text_codec audio_player \
               diagnostics host_console emulator_thread main_window dialogs \
-              settings version update updater
+              settings version update updater tcp_link
 # Nezavisle na emulatore, da sa vziat do ineho projektu tak ako je.
 WIN_NAMES  := window dialog
 EMU_OBJS   := $(addprefix $(BUILD)/,$(addsuffix .o,$(EMU_NAMES))) \
@@ -154,9 +154,10 @@ $(BUILD)/eureka_res.o: src/res/eureka.rc src/res/resource.h \
 #
 # winhttp a bcrypt su pre aktualizacie (updater.cpp): spojenie s GitHubom
 # a SHA-256 stiahnuteho EXE. Obe su sucastou Windows, nic navyse sa nenosi.
+# ws2_32 je seriovy kabel medzi emulatormi (tcp_link.cpp).
 $(EMU): $(EMU_OBJS) | $(BIN)
 	$(CXX) -municode -mwindows $(STATIC) -Wl,--gc-sections -s -o $@ \
-	    $(EMU_OBJS) -lwinmm -lole32 -lshell32 -luuid -lcomctl32 -lwinhttp -lbcrypt
+	    $(EMU_OBJS) -lwinmm -lole32 -lshell32 -luuid -lcomctl32 -lwinhttp -lbcrypt -lws2_32
 
 # codec_test a disk_test maju obycajny main, preto bez -municode; s nim
 # linker spadne na chybajucom wWinMain.
@@ -192,8 +193,10 @@ $(BIN)/zex_test.exe: $(BUILD)/test_zex_test.o $(BUILD)/z80.o | $(BIN)
 $(BIN)/diag_probe.exe: $(BUILD)/test_diag_probe.o $(SESSION_OBJS) $(CORE_OBJS) | $(BIN)
 	$(CXX) $(STATIC) -municode -o $@ $^
 
-$(BIN)/integration_test.exe: $(BUILD)/test_integration_test.o $(SESSION_OBJS) $(CORE_OBJS) | $(BIN)
-	$(CXX) $(STATIC) -municode -o $@ $^
+# tcp_link.o pre rezim kabel, ktory prenos skusa aj cez skutocny socket.
+$(BIN)/integration_test.exe: $(BUILD)/test_integration_test.o $(SESSION_OBJS) $(CORE_OBJS) \
+                            $(BUILD)/tcp_link.o | $(BIN)
+	$(CXX) $(STATIC) -municode -o $@ $^ -lws2_32
 
 # ---------------------------------------------------------------------------
 # Testy

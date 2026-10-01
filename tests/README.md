@@ -47,7 +47,9 @@ cannot tell a broken cable from a silent one, so this holds what it would
 otherwise never notice: every byte arrives once and in order, `FFh` included,
 which the wire uses as its escape; RTS reaches the far side as CTS and never
 overtakes a byte sent before it; a lost cable is reported and leaves CTS
-dropped; a third emulator is turned away without breaking the first two; and
+dropped; a third emulator is turned away without breaking the first two;
+unplugging while a connection attempt hangs does not wait for it, since the
+window is the one unplugging; and
 the address typed by the user is parsed the same way the dialog will. No ROM,
 loopback only, every port from `Listen(0)`.
 
@@ -297,10 +299,13 @@ them on the same diskette.
   timeout waiting for the other.  One sends a 1340-byte file with Komunikace
   (F4, Shift+F3), the other receives it (F4, F3) over XMODEM (HANDOFF 6.53),
   both must say "provedeno", and the file that lands must equal the one that
-  left.  It makes its own diskettes in `%TEMP%` and leaves the shared one
+  left.  The same transfer then runs again through two `TcpLink`s on
+  127.0.0.1 (`tcp=ok`): `link_test` holds the bytes, this holds that
+  Komunikace gets through when they arrive from another thread, a little
+  late.  It makes its own diskettes in `%TEMP%` and leaves the shared one
   alone.  Verified by mutation: characters sent without a character time fail
-  `tlac`, no receive interrupt fails `kabel`, and CTS asserted with no cable
-  fails `tlac`.
+  `tlac`, no receive interrupt fails `kabel`, CTS asserted with no cable
+  fails `tlac`, and RTS lost on the socket fails the `tcp` half of `kabel`.
 
 The test disk folder must contain a native Eureka `READ.COM` and `BEEP.BAS`.
 A genuine `READ.COM` ships with the Technical Manual's development disk, which

@@ -34,6 +34,17 @@ bool Signaled(void* event) {
   return WSAWaitForMultipleEvents(1, &event, FALSE, 0, FALSE) == WSA_WAIT_EVENT_0;
 }
 
+// In ws2_32.dll since Windows 8, but msys2's ws2tcpip.h does not declare them.
+// Through void* because a FARPROC cast straight to another function type is
+// what -Wcast-function-type is there to catch.
+template <typename Function>
+Function FromWs2(const char* name) {
+  return reinterpret_cast<Function>(
+      reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ws2_32.dll"), name)));
+}
+using CancelLookup = INT(WSAAPI*)(LPHANDLE);
+using LookupResult = INT(WSAAPI*)(LPOVERLAPPED);
+
 }  // namespace
 
 TcpLink::TcpLink() : listenSocket_(INVALID_SOCKET) {
@@ -181,13 +192,36 @@ void TcpLink::ListenLoop() {
 }
 
 void TcpLink::ConnectLoop(std::wstring host, uint16_t port) {
-  ADDRINFOW hints{};
+  ADDRINFOEXW hints{};
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = IPPROTO_TCP;
-  ADDRINFOW* found = nullptr;
-  const int resolved = GetAddrInfoW(host.c_str(), std::to_wstring(port).c_str(), &hints, &found);
+  ADDRINFOEXW* found = nullptr;
+  // The lookup is asynchronous only so that Close() can cancel it.  A name
+  // the DNS never answers for would otherwise hold whoever unplugs the cable
+  // for as long as Windows keeps asking -- and that is the window thread.
+  OVERLAPPED lookup{};
+  lookup.hEvent = WSACreateEvent();
+  HANDLE pending = nullptr;
+  int resolved = GetAddrInfoExW(host.c_str(), std::to_wstring(port).c_str(), NS_ALL, nullptr,
+                                &hints, &found, nullptr, &lookup, nullptr, &pending);
+  if (resolved == WSA_IO_PENDING) {
+    WSAEVENT events[] = {stop_, lookup.hEvent};
+    WSAWaitForMultipleEvents(2, events, FALSE, WSA_INFINITE, FALSE);
+    if (Signaled(stop_)) {
+      FromWs2<CancelLookup>("GetAddrInfoExCancel")(&pending);
+      // Cancelled or not, the lookup owns `lookup` and `found` until it
+      // signals.
+      WSAWaitForMultipleEvents(1, &lookup.hEvent, FALSE, WSA_INFINITE, FALSE);
+      if (found != nullptr) FreeAddrInfoExW(found);
+      WSACloseEvent(lookup.hEvent);
+      return;
+    }
+    resolved = FromWs2<LookupResult>("GetAddrInfoExOverlappedResult")(&lookup);
+  }
+  WSACloseEvent(lookup.hEvent);
   if (resolved != 0) {
+    if (found != nullptr) FreeAddrInfoExW(found);
     state_ = State::kIdle;
     Notify(Event::kFailed, ErrorText(resolved));
     return;
@@ -196,7 +230,7 @@ void TcpLink::ConnectLoop(std::wstring host, uint16_t port) {
   SOCKET connected = INVALID_SOCKET;
   int lastError = WSAETIMEDOUT;
   bool stopped = false;
-  for (ADDRINFOW* candidate = found; candidate != nullptr && !stopped;
+  for (ADDRINFOEXW* candidate = found; candidate != nullptr && !stopped;
        candidate = candidate->ai_next) {
     const SOCKET attempt =
         socket(candidate->ai_family, candidate->ai_socktype, candidate->ai_protocol);
@@ -234,7 +268,7 @@ void TcpLink::ConnectLoop(std::wstring host, uint16_t port) {
     }
     closesocket(attempt);
   }
-  FreeAddrInfoW(found);
+  FreeAddrInfoExW(found);
   WSACloseEvent(connecting);
   if (stopped) return;
   if (connected == INVALID_SOCKET) {

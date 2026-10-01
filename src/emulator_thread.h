@@ -26,6 +26,7 @@
 #include "disk_stash.h"
 #include "machine.h"
 #include "settings.h"
+#include "tcp_link.h"
 
 // How the host keyboard is presented to the machine.  The Eureka had exactly
 // two keyboards -- the braille one built in and the optional PC one on the
@@ -78,6 +79,9 @@ enum : UINT {
   WM_EMU_NO_AUDIO = WM_APP + 5,
   // A diskette went in or came out: the title, the menu and About all name it.
   WM_EMU_DISK_CHANGED = WM_APP + 6,
+  // The serial cable to another emulator was plugged in, lost, or could not
+  // be: wParam is the TcpLink::Event.  Posted from the cable's own thread.
+  WM_EMU_CABLE = WM_APP + 7,
 };
 
 // How a diskette is named in the window title (short) and in About (long).
@@ -299,6 +303,21 @@ class EmulatorThread {
   // What the last swap did, for the WM_EMU_DISK_CHANGED handler.
   DiskChange TakeDiskChange();
 
+  // The serial cable to another emulator (ea4-7zw.4), plugged into the
+  // machine's RS-232 socket for as long as the worker runs.  These do not go
+  // through the queue, and that is not an exception to "the window never
+  // touches the machine": the cable is not the machine.  The machine only
+  // calls the SerialLink half, which takes its own lock, and none of these
+  // ever waits for the machine or makes it wait -- Close() cancels a lookup
+  // instead of sitting it out.
+  bool CableListen(uint16_t port, std::wstring& error) { return cable_.Listen(port, error); }
+  void CableConnect(const std::wstring& host, uint16_t port) { cable_.Connect(host, port); }
+  void CableClose() { cable_.Close(); }
+  TcpLink::State cable_state() const { return cable_.state(); }
+  uint16_t cable_port() const { return cable_.port(); }
+  // Why the last connection attempt failed, for the WM_EMU_CABLE handler.
+  std::wstring TakeCableDetail();
+
  private:
   struct Command {
     enum class Type {
@@ -338,6 +357,12 @@ class EmulatorThread {
 
   // Written by the worker, read by the owner after Stop().
   DiskStash stash_;
+
+  // Before the cable, so that they outlive it: its thread reports into them
+  // until its destructor has joined it.
+  std::mutex cableMutex_;
+  std::wstring cableDetail_;
+  TcpLink cable_;
 
   std::atomic<InputMode> mode_{InputMode::kPc};
   std::atomic<bool> diagnostics_{false};

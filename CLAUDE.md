@@ -371,16 +371,21 @@ Drží aj to, že `WaitSaid` počúva **len odpoveď na posledný kláves** — 
 reč neberie, takže inak by opakovaná otázka našla sama seba z minulého kola.
 
 Režimy `tlac` a `kabel` držia **sériový kanál 1** (`SerialLink`,
-`src/serial_link.h`, HANDOFF 6.3 a 6.53) a sú jediné, čo ho drží — okno doň
-zatiaľ nič nezapája. `tlac` tlačí z textového procesora postupom majiteľa:
+`src/serial_link.h`, HANDOFF 6.3 a 6.53) a sú jediné, čo ho drží. V okne je
+do zásuvky zapojený `TcpLink` (`EmulatorThread`), ponuka k nemu zatiaľ nie je
+(`ea4-7zw.4`); bez spojenia sa správa ako prázdna zásuvka. `tlac` tlačí z textového procesora postupom majiteľa:
 bez kábla musí zaznieť „tiskárna není připravena“, s tlačiarňou v pamäti
 prísť 174 bajtov strany nie rýchlejšie než znak za 6400 cyklov, a pri
 sekundovom výpadku CTS tá istá strana celá. `kabel` spojí dva stroje
 nulmodemom v jednom procese, pošle XMODEM-om 1340 bajtov a porovná prijatý
 súbor s pôvodným; stroje beží striedavo podľa vlastného času, inak by jeden
-odbehol druhému do časového limitu. Diskety si robí v `%TEMP%`, zdieľanú
+odbehol druhému do časového limitu. Ten istý prenos potom zopakuje cez dva
+`TcpLink` na `127.0.0.1` (`tcp=ok` vo výpise) — bajty drží `link_test`, toto
+drží, že Komunikace prejde, aj keď bajty prichádzajú z iného vlákna a o niečo
+neskôr. Diskety si robí v `%TEMP%`, zdieľanú
 nepoužíva. Overené mutáciou: znaky bez času znaku zhodia `tlac`, chýbajúce
-prerušenie od prijatého bajtu `kabel`, CTS aktívne bez kábla zase `tlac`.
+prerušenie od prijatého bajtu `kabel`, CTS aktívne bez kábla zase `tlac`,
+zahodené RTS na sockete variant `tcp` v `kabel`.
 Odpovede na výzvy tlače idú cez `Type`, nie `Press` — hotový kód tam
 nedôjde (`ea4-7zw.5`).
 
@@ -425,7 +430,8 @@ to, čo by inak nikto nespozoroval: každý bajt príde raz a v poradí, aj `FFh
 ktorým sa na drôte escapuje; RTS dôjde na druhú stranu ako CTS a **nepredbehne
 bajty poslané pred ním** (ide v tom istom prúde); strata kábla sa ohlási a CTS
 po nej nevisí; tretí emulátor sa odmietne bez toho, aby prvým dvom spadol
-kábel; a adresa sa rozoberie tak, ako ju napíše používateľ. Overené mutáciou:
+kábel; odpojenie počas pripájania na adresu, kde nikto neodpovedá, nečaká
+(volá ho okno); a adresa sa rozoberie tak, ako ju napíše používateľ. Overené mutáciou:
 vynechané escapovanie `FFh` zhodí tri kontroly. Vynechané nulovanie CTS po
 strate nezhodí nič a je to správne — `ClearToSend` sa pýta aj na stav spojenia.
 
@@ -665,6 +671,12 @@ lebo NVDA považuje doplnky za odvodené dielo (`nvda-addon/COPYING.txt`).
   jednu frontu príkazov — preto tam nie je ani jeden zámok nad strojom.
   Klávesy idú tou istou frontou ako príkazy, aby si prepnutie režimu
   nepredbehlo kláves napísaný po ňom.
+  **Sériový kábel do fronty nejde** a nie je to výnimka z pravidla: `TcpLink`
+  nie je stroj. Vlákno ho vlastní a zapojí do stroja pri `Start`, okno volá
+  `CableListen`, `CableConnect` a `CableClose` priamo, stroj volá len polovicu
+  `SerialLink`, ktorá má vlastný zámok. Nikto z nich nečaká na druhého —
+  `Close()` vyhľadávanie mena **zruší** (`GetAddrInfoExCancel`), nečaká naň.
+  Udalosti kábla prichádzajú oknu ako `WM_EMU_CABLE` z vlákna kábla.
 - Vlákno tam nie je kvôli poriadku. Rozbalená ponuka, modálny dialóg aj
   ťahanie okna si spustia **vlastnú správovú slučku**; jednovláknový
   emulátor by v nich stál a pri 22 ms latencie by sa reč zasekla uprostred

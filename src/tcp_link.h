@@ -58,7 +58,8 @@ class TcpLink : public SerialLink {
   // Connects in the background; the outcome arrives as kConnected or kFailed.
   // A connection that is lost is not retried.
   void Connect(const std::wstring& host, uint16_t port);
-  // Unplugs the cable.  Blocks while a name lookup is in progress.
+  // Unplugs the cable, cancelling a name lookup or a connection attempt that
+  // is still under way.  Safe from any thread but the listener's.
   void Close();
 
   State state() const { return state_.load(); }
