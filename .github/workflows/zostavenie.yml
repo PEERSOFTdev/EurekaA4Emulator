@@ -7,7 +7,7 @@
 # predinštalovaný v C:\msys64, takže predvolené cesty v dávkach platia.
 #
 # ROM sem nepatrí ani ako tajný súbor -- je to firmvér (ROM-NOTICE.txt). Bežia
-# preto len štyri testy, ktoré ju nepotrebujú; šestnásť režimov
+# preto len päť testov, ktoré ju nepotrebujú; osemnásť režimov
 # integration_test zostáva na run-tests.bat.
 
 name: Zostavenie
@@ -92,12 +92,13 @@ jobs:
           if ($out -match 'warning:') { Write-Error 'Preklad testov hlási varovanie.'; exit 1 }
 
       # Tie isté ciele, ktoré púšťa run-tests.bat; zoznam režimov je len
-      # v Makefile.
+      # v Makefile. check-link spája dva konce kábla cez 127.0.0.1, sieť
+      # mimo runnera nepotrebuje.
       - name: Testy bez ROM
         shell: cmd
         run: |
           set "PATH=C:\msys64\mingw64\bin;%PATH%"
-          mingw32-make MINGW64=C:/msys64/mingw64 --output-sync=target -k check-codec check-disk check-settings check-update
+          mingw32-make MINGW64=C:/msys64/mingw64 --output-sync=target -k check-codec check-disk check-settings check-update check-link
 
       # build-addon.bat bez msgfmt len varuje a zabalí doplnok bez prekladu;
       # tu to má byť chyba, nie tichý anglický doplnok.
