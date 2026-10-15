@@ -54,7 +54,7 @@ otázok a ukázal, že dve „zistenia" odvodené z ROM boli nesprávne.
 
 Analyzovaný dump: `C:\b\a4rom.dmp`, 262144 B, MD5 `9aa101ab69fc367e114e1a84b08feea1`.
 
-Do repozitára **nepatrí** (viď `ROM-NOTICE.txt`). Nástroje ho hľadajú cez
+Do repozitára **nepatrí** (viď `PRAVNE.md`). Nástroje ho hľadajú cez
 premennú prostredia `A4ROM`, inak na ceste vyššie.
 
 Dump je **kompletný a neporušený** — všetkých päť modulov má platný 8-bitový
@@ -4665,6 +4665,63 @@ modelmi, je odvodené z jedinej zmenenej inštrukcie, nie zmerané.
 
 **Otvorené:** spustiť na anglickom stroji a priniesť `A4ROM.DMP`
 a `A4INFO.TXT`.
+
+**Právny rámec** (14. 10. 2026, vetva `rom-dump`): postavenie projektu
+k firmvéru, manuálu, rozmnoženine z vlastného stroja aj k tomuto nástroju
+je v `PRAVNE.md`, ktorý nahradil `ROM-NOTICE.txt`. Opiera sa o český,
+slovenský a austrálsky autorský zákon a smernicu 2009/24/ES; ustanovenia
+sú overené proti úradným textom okrem článkov smernice a rozsudku
+*UsedSoft*. Bod 5 hovorí, že nástroj je vlastné dielo projektu.
+`DUMPROM.PAS` je upravená verzia vlastného programu majiteľa a `dma0move`
+je jeho; test modelu treba pri úprave nástroja porovnať s `a4_check`
+v `A4.INC` z vývojárskej diskety, aby bolo doložené, že prevzatá je len
+skutočnosť (CBAR = F0h a BBR = 40h), nie kód.
+
+**Po recenzii PR 8** (17. 10. 2026) už neplatí, že články smernice nie sú
+overené: čl. 1 ods. 2, 4 ods. 2, 5, 6 ods. 1, 7 ods. 1 písm. c) a 8 sú
+porovnané so slovenským znením na EUR-Lex. Neoverený zostáva len
+*UsedSoft*, a preto už v bode 4.2 nenesie oprávnenie sám: hlavný základ je
+vyčerpanie práva rozširovania hmotnej rozmnoženiny (smernica čl. 4 ods. 2,
+CZ § 14 ods. 2, SK § 88, overené). Overením českého § 66 sa našla chyba
+v bode 4.3: písmeno a) (zavedenie a prevádzka, zmluvou nezúžiteľné)
+a písmeno b) (využitie v súlade s určením, „není-li dohodnuto jinak“) boli
+zlúčené do jednej odrážky so znením b) a citáciou a). Beh v emulátore sa
+teraz opiera o b) a vyhlásenie hovorí, že to nie je ustálené; nezúžiteľná je
+záloha a austrálske s 47C(1)(c)(i). § 66 ods. 6 má dve vety (definícia
+oprávneného používateľa, minimálny rozsah) a cituje sa po vetách. Robotron
+Pty. Ltd. je v Australian Business Register zapísaná ako činná (ABN aktívne
+od 28. 3. 2000, ACN pôvodnej spoločnosti, bez nástupcu; overené
+18. 10. 2026 podľa hodín registra). Potvrdzuje to aj register ASIC
+(otvorená sada „Company Dataset“ na data.gov.au, stav k 12. 10. 2026):
+ACN 006 118 930 má stav `REGD`, bez dátumu výmazu, zapísaná 2. 2. 1983
+vo Victorii ako FIFTY-FIFTH GLITTER PTY. LTD. a od 10. 3. 1983 pod menom
+ROBOTRON PTY. LTD. — je to tá istá spoločnosť od založenia. Body 4.5
+a 8.4 sú prepísané z príkazov na opis zákona a pravidlá prijímania
+príspevkov.
+
+**Otvorené vyššie už neplatí v celom rozsahu** (15. 10. 2026): `A4ROM.DMP`
+zo stroja, ktorý je len požičaný, sa **nedonáša**. Rozmnoženinu smie
+vyhotoviť a ponechať si len vlastník alebo nadobúdateľ licencie, a to pre
+vlastné použitie (`PRAVNE.md` body 3.4, 4.3 a 4.5; austrálsky Copyright Act
+s 47C ju výslovne viaže na vlastníka, ktorý si originál ponechá).
+Vypožičiavateľ stroj vracia, takže by mu kópia neslúžila na nič, čo zákon
+pozná, a vlastník mu svoju odovzdať nesmie. `A4INFO.TXT` emulátoru nič
+nové neprinesie: mapu variantov už dokladá `MEMMAP.E`.
+
+Podpora variantu, ktorý projekt nevlastní, sa preto robí takto:
+
+- kód podľa manuálu (mapa pamäte, MMU, rozpoznanie modelu), ROM na to
+  netreba (`PRAVNE.md` bod 2);
+- nezdokumentované správanie pozorovaním **na samotnom stroji**, kým je
+  požičaný (čas, reč, odozva na klávesy, disketu a sériovú linku), a
+  vlastnými testovacími programami, ktorých výsledky sú naše, bez
+  rozmnoženiny firmvéru (bod 8.4);
+- čo sa dá zistiť len z kódu, overí **vlastník** variantu: spúšťa emulátor
+  alebo sondu so svojou rozmnoženinou a posiela výsledky, nie súbor
+  (bod 8.4).
+
+Statická disassembly variantu, ktorý projekt nevlastní, tým odpadá. To je
+cena hranice, ktorú `PRAVNE.md` drží.
 
 ## 7. Nástroje
 

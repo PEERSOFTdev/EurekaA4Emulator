@@ -79,7 +79,7 @@ ho emulátor nenájde, otvorí dialóg so zoznamom všetkých ciest, na ktorých
 hľadal, a skončí — čítačka obrazovky ten dialóg ohlási a prečíta, takže
 sa dá zistiť, kam súbor patrí, bez hádania.
 
-Podrobnosti o právach sú v `ROM-NOTICE.txt`.
+Podrobnosti o právach sú v `PRAVNE.md`.
 
 ## Rýchly štart
 
@@ -1052,7 +1052,7 @@ s návratovým kódom 2 a povie to.
 Emulátor je pod licenciou MIT; pozrite `LICENSE.txt`. Štyri veci k tomu:
 
 - **ROM nie je súčasťou licencie zdrojového kódu** a v repozitári nie je;
-  pozrite `ROM-NOTICE.txt`.
+  pozrite `PRAVNE.md`.
 - **Doplnok v `nvda-addon\` je pod GPL v2+**, lebo NVDA považuje doplnky
   za odvodené dielo; pozrite `nvda-addon\COPYING.txt`.
 - Použité jadro Z80 má vlastné MIT oznámenie

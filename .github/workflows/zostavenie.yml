@@ -6,7 +6,7 @@
 # NVDA linuxový náprotivok nemá a mať nemá (CLAUDE.md). msys2 je na runneri
 # predinštalovaný v C:\msys64, takže predvolené cesty v dávkach platia.
 #
-# ROM sem nepatrí ani ako tajný súbor -- je to firmvér (ROM-NOTICE.txt). Bežia
+# ROM sem nepatrí ani ako tajný súbor -- je to firmvér (PRAVNE.md). Bežia
 # preto len šesť testov, ktoré ju nepotrebujú; osemnásť režimov
 # integration_test zostáva na run-tests.bat.
 

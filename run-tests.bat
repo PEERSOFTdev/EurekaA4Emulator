@@ -10,7 +10,7 @@ rem Volanie:  run-tests.bat            (ROM z %A4ROM%, inak C:\b\a4rom.dmp)
 rem           run-tests.bat C:\cesta\a4rom.dmp
 rem
 rem Technical Manual sa hlada v %EUREKATECH%, inak v C:\b\eurekatech. Je to
-rem material tretich stran a v repozitari nie je -- vid ROM-NOTICE.txt. Bez
+rem material tretich stran a v repozitari nie je -- vid PRAVNE.md. Bez
 rem neho sa preskocia rezimy com a wp a testov je dvadsatdva, nie dvadsatstyri.
 
 if "%MINGW64%"=="" set "MINGW64=C:\msys64\mingw64"

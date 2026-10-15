@@ -92,7 +92,7 @@ volanie, hľadaj najprv tam.
 
 Pozor: obsah toho priečinka je materiál tretích strán (Robotron
 a Borland) a MIT licencia projektu sa naň nevzťahuje. Viď `PUVOD.md`
-v ňom a `ROM-NOTICE.txt` tu. **Nekopíruj z neho súbory do repozitára** —
+v ňom a `PRAVNE.md` tu. **Nekopíruj z neho súbory do repozitára** —
 to je presne tá cesta, ktorou by sa do zverejneného stromu vrátili.
 
 ### Čísla portov a bitov sú v `src/eureka_io.h`, s menami z manuálu

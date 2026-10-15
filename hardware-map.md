@@ -6,7 +6,7 @@ Pôvodne bolo všetko nižšie odvodené výhradne z kódu v tejto ROM. Od
 24. 8. 2026 je k dispozícii aj **oficiálny Eureka A4 Technical Manual**
 (príloha H `IOPORT.H` a súbor `IOPORT.LIB` sú úplnou mapou externých
 portov). Od 20. 9. 2026 leží mimo repozitára, v `%EUREKATECH%`, inak
-`C:\b\eurekatech` — je to materiál tretích strán, viď `ROM-NOTICE.txt`. Tam, kde sa odvodené a doložené líšilo, je
+`C:\b\eurekatech` — je to materiál tretích strán, viď `PRAVNE.md`. Tam, kde sa odvodené a doložené líšilo, je
 nižšie uvedené oboje aj s vysvetlením, prečo odvodenie zlyhalo — inak by
 sa tá istá chyba dala urobiť znovu.
 

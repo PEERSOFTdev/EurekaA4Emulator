@@ -26,7 +26,7 @@
 
 # Tu stavalo `eurekatech/** -text`, ktore chranilo dobove subory z roku 1992
 # pred konverziou koncov riadkov. Priecinok je od 20. 9. 2026 mimo
-# repozitara (ROM-NOTICE.txt), takze pravidlo nema co chranit. Keby sa sem
+# repozitara (PRAVNE.md), takze pravidlo nema co chranit. Keby sa sem
 # niekedy vratil, patri mu vlastne pravidlo a musi byt POSLEDNE: pri zhode
 # viacerych vzorov vyhrava ten nizsie, takze len tak prebije `* text=auto`.
 
