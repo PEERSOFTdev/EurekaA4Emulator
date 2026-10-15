@@ -104,7 +104,8 @@ jobs:
           $stage = "balik\$name"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item vydanie\EurekaA4Emulator.exe, vydanie\eurekaA4Emulator.nvda-addon, `
-                    Spustit-Eureku.bat, README.md, LICENSE.txt, PRAVNE.md $stage
+                    Spustit-Eureku.bat, README.md, LICENSE.txt, PRAVNE.md, `
+                    tools\dumprom\DUMPROM.COM $stage
           # The drive sounds built into the EXE, as a pattern for one's own
           # (NAVOD.md) -- and PUVOD.md has to travel with the EXE anyway: the
           # motor is CC BY, which asks for its author wherever it goes.
@@ -165,7 +166,7 @@ jobs:
           } else {
             $notes = 'Prvé vydanie.'
           }
-          $notes += "`n`nROM v balíku nie je, treba si ju dodať zo svojho stroja -- viď PRAVNE.md a README."
+          $notes += "`n`nROM v balíku nie je, treba si ju vyčítať zo svojho stroja programom DUMPROM.COM -- viď README a PRAVNE.md."
           Set-Content -Encoding utf8NoBOM poznamky.md $notes
           $version = $env:ZNACKA.Substring(1)
           gh release create $env:ZNACKA --target $env:GITHUB_SHA `

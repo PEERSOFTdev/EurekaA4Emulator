@@ -4723,6 +4723,63 @@ Podpora variantu, ktorý projekt nevlastní, sa preto robí takto:
 Statická disassembly variantu, ktorý projekt nevlastní, tým odpadá. To je
 cena hranice, ktorú `PRAVNE.md` drží.
 
+**Program v Pascale už neplatí** (15. 10. 2026): nahradil ho
+`tools/dumprom/dumprom.s` v assembleri Z180, 1294 bajtov, zostavený GNU
+binutils pre Z80 (`build.sh`). Dôvod je právny, nie technický: COM
+z Turbo Pascalu 3 nesie na začiatku runtime skopírovaný z prekladača, teda
+kód Borlandu (a možno Robotronu, ktorý prekladač upravil, `TURBO.F`), a ten
+pod licenciou projektu šíriť nemôžeme; podmienky jeho šírenia na diskete
+nie sú. Assembler je celý náš. `DUMPROM.PAS` je zmazaný. Neplatí preto ani
+odsek vyššie o dumpe bánk 0–4 do jedného súboru a o `A4INFO.TXT`:
+
+- **`A4ROM.DMP` má 262 144 bajtov**, banky 0–3 — presne to, čo berie
+  `LoadRom` (`kRomSize`). Pascalový program zapisoval 320 KiB a emulátor
+  taký súbor odmietol; v odseku vyššie je to vidieť na „prvých 256 KiB“.
+- **Banka 4 do neho nejde nikdy.** Na českom stroji s modulom z 6.51 je
+  v nej RAM majiteľa, na Advanced English page 0 a TPA.
+- **Rozloženie sa určuje z bánk 2 a 3**, nie z toho, čo vráti prázdne
+  `40000h` (to nevieme). Podľa `MEMMAP.E` má každá zostava pre 27C512
+  v bankách 2–3 ROM a zostava pre 27C256 tam čip nemá; jej ROM pokračuje na
+  `40000h–4FFFFh`. Stroj s dátami v bankách 0–1 a 4 a bez nich v 2–3 dostane
+  **`A4ROM256.DMP`** (327 680 bajtov, banky 0–4), aby sa raz dal podporiť.
+  Inak program povie, čo našiel v ktorej banke, a nezapíše nič.
+- Banka je **prázdna**, keď má každá jej strana jeden opakovaný bajt,
+  a **zrkadlo**, keď sa podpisy všetkých 16 strán (dva 16-bitové súčty,
+  druhý cez priebežný prvý, takže záleží na poradí) zhodujú s niektorou
+  skoršou bankou. Každá strana sa číta **dvakrát**; banka, ktorej strana
+  dá druhý raz iný podpis, je **nestabilná** („unstable“) a za dáta sa
+  nepočíta — ROM sa číta vždy rovnako, prázdna pätica môže vracať, čo
+  pláva na zbernici. Hranice modulov z manuálu sa nepoužívajú — česká zostava
+  má operačný systém na `18000h`, nie na `08000h`.
+- `A4INFO.TXT` nie je. Pri nečakanej mape program povie CBAR, BBR a CBR
+  nahlas a nezapíše nič.
+- Prenos DMA je `dmaread`; `DMA0MOVE.AS` z diskety je iný kód (`OTIMR`
+  z bloku parametrov), spoločné sú len hodnoty, ktoré určuje HD64180
+  (DMODE `02h`, bity DSTAT). Test modelu zdieľa s `a4_check` len skutočnosť
+  CBAR = F0h a BBR = 40h a `JP` na `0008h`. Tým je splnené, čo žiada
+  odsek „Právny rámec“ vyššie.
+
+**Zmerané v emulátore** sondou (`kD6 DUMPROM~ ?Done . . ram`; disketu
+zapíše do priečinka až `ram`, nie koniec programu): „Standard Eureka“,
+banky 0–3 `data`, 4 `empty`, `A4ROM.DMP` 262 144 bajtov s MD5
+`9aa101ab69fc367e114e1a84b08feea1`; to isté s `+banka4`. Vetvy, ktoré
+emulátor nemodeluje, sú overené mutáciou v kópii mimo repozitára: banky
+premapované na 0, 1, 0, 0, 2 dajú „ROM on 27C256 chips“ a `A4ROM256.DMP`
+(obsah overený po bankách); 0, 1, 0, 3, 4 „Unknown ROM layout, nothing
+written“ bez súboru; prah RAM `80h` namiesto `40h` „Unexpected memory map“
+a „CBAR D0 BBR 70 CBR FD“; porovnanie s hodnotami tohto stroja „Advanced
+English Eureka“ a normálny dump; druhé čítanie banky 2 z banky 1 „bank 2
+unstable“ a „Unknown ROM layout“ bez súboru. Mutácia 27C256 prešla aj po
+pridaní druhého čítania.
+
+**Neoverené:** beh na skutočnom stroji vôbec, jeho trvanie, Advanced
+English a 27C256 naozaj, a čo vráti prázdna banka na skutočnom hardvéri.
+Prázdno, zrkadlo aj meniaci sa šum rozhodovanie zvládne. **Nezvládne šum,
+ktorý sa pri dvoch čítaniach zopakuje a nie je jeden bajt** (napríklad
+bajt závislý od adresy): na stroji s 27C256 by z bánk 2–3 spravil dáta
+a program by zapísal `A4ROM.DMP` bez operačného systému z `40000h`. Rozhodne
+to až prvý beh na takom stroji.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
