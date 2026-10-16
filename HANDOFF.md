@@ -4780,6 +4780,26 @@ bajt závislý od adresy): na stroji s 27C256 by z bánk 2–3 spravil dáta
 a program by zapísal `A4ROM.DMP` bez operačného systému z `40000h`. Rozhodne
 to až prvý beh na takom stroji.
 
+**Obraz diskety `DUMPROM.IMG`** (16. 10. 2026) zapisuje `build.sh` vedľa
+COM: 819 200 bajtov, jedna položka adresára (`DUMPROM.COM`, bloky od 4),
+posledný záznam doplnený `1Ah`, zvyšok bloku nulami, inde `E5h`. Poradie je
+to, ktoré SAMdisk berie pri `samdisk DUMPROM.IMG A:` — najprv všetky stopy
+hlavy 0, potom hlavy 1, sektory podľa ID, logické sektory preložené podľa
+`SectorOffset`. Overené raz: zhoduje sa bajt na bajt s obrazom, ktorý
+vyrobil doplnok CPMIMG do Total Commandera, doplneným `E5h` na plnú
+veľkosť a preusporiadaným na hlavu 0 pred hlavou 1, a ten obraz prečítaný
+cez prekladanie emulátora dá jeden súbor zhodný s `DUMPROM.COM`. Poradie
+hláv je zo skúsenosti majiteľa so SAMdiskom, nie z jeho dokumentácie.
+**Neoverené:** zápis na skutočnú disketu a čítanie na Eureke.
+
+Od recenzie PR 8 (17. 10. 2026) to už nie je overené len raz ručne:
+`disk_test` (`DumpromImageHoldsTheProgram`) zapíše obraz cez
+`WritePhysicalSector` a vyexportovaný súbor porovná s `DUMPROM.COM`.
+Overené mutáciou: tabuľka prekladania v `build.sh` bez prekladania aj
+prehodené hlavy zhodia `dumprom_obraz_ma_jeden_subor`. Workflow „Zostavenie“
+má úlohu `dumprom`, ktorá COM aj obraz zostaví na Ubuntu 24.04 (binutils-z80
+2.38, tá istá verzia ako lokálne) a porovná ich s repozitárom.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.

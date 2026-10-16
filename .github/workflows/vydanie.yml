@@ -105,7 +105,7 @@ jobs:
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item vydanie\EurekaA4Emulator.exe, vydanie\eurekaA4Emulator.nvda-addon, `
                     Spustit-Eureku.bat, README.md, LICENSE.txt, PRAVNE.md, `
-                    tools\dumprom\DUMPROM.COM $stage
+                    tools\dumprom\DUMPROM.COM, tools\dumprom\DUMPROM.IMG $stage
           # The drive sounds built into the EXE, as a pattern for one's own
           # (NAVOD.md) -- and PUVOD.md has to travel with the EXE anyway: the
           # motor is CC BY, which asks for its author wherever it goes.

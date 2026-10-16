@@ -27,6 +27,21 @@ README. Je v ňom len náš kód — volania BDOS a registre HD64180 sú rozhran
 a skontroluje, že program končí pod svojím bufferom na `2000h`. Treba ho len
 po zmene zdrojáka.
 
+Ten istý skript zapíše aj `DUMPROM.IMG`, obraz diskety Eureky (819 200
+bajtov) len s `DUMPROM.COM`, ktorý SAMdisk zapíše na skutočnú disketu.
+Poradie je surový obraz SAMdisku: všetky stopy hlavy 0, potom hlavy 1,
+v každej stope sektory podľa ID; logické sektory sú v nich preložené ako
+v `SectorOffset` v `src/virtual_disk.cpp`. Overené raz proti obrazu
+z iného nástroja (HANDOFF 6.55).
+
+Oba súbory sú commitnuté a vydanie ich balí tak, ako sú. Preto ich workflow
+„Zostavenie“ pri každom pushi a pull requeste zostaví nanovo a zlyhá, keď sa
+nezhodujú s repozitárom bajt na bajt — po zmene `dumprom.s` treba `build.sh`
+spustiť a commitnúť aj výsledok. `disk_test` (`DumpromImageHoldsTheProgram`)
+zase prečíta obraz cez prekladanie emulátora a overí, že nesie práve
+`DUMPROM.COM`; tak sa tabuľka v `build.sh` a v `SectorOffset` nemôže ticho
+rozísť.
+
 Overené v emulátore (HANDOFF 6.55): na našej ROM zapíše `A4ROM.DMP` s MD5
 `9aa101ab69fc367e114e1a84b08feea1`, aj s osadenou rozšírenou RAM. Vetvy pre
 27C256, Advanced English, neznáme rozloženie a nečakanú mapu pamäte

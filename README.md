@@ -109,6 +109,19 @@ z nej prenesie na bežnú disketu Eureky program DosRead (`DR.COM` alebo
 `DR12.COM`), ktorý používatelia Eureky poznajú. S emulátorom nie je
 dodávaný.
 
+**Hotovou disketou Eureky.** V balíku je aj `DUMPROM.IMG`, obraz diskety
+Eureky, na ktorej je len `DUMPROM.COM`. Na skutočnú disketu ho zapíše
+program SAMdisk (simonowen.com/samdisk), ktorým sa diskety Eureky bežne
+archivujú:
+
+```
+samdisk DUMPROM.IMG A:
+```
+
+`A:` je písmeno disketovej mechaniky. Mechanika musí byť pripojená
+k radiču diskiet v počítači; USB mechanika formát Eureky nezapíše. Takú
+disketu stačí vložiť do Eureky a program spustiť, nič sa neprenáša.
+
 **Spustenie.** Na Eureke vložte disketu s programom, na ktorej je aspoň
 330 KB voľného miesta, stlačte `Shift+F7`, napíšte `DUMPROM` a potvrďte
 Enterom. Program povie, na akom modeli beží, a „Reading, please wait“. Potom
