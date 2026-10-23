@@ -7,6 +7,9 @@ Usage:
                                                  (the original goes to .BAK)
     python pasinline.py SOURCE.PAS --strip ...   only remove the annotations
 
+Options may stand in any order. A code element the tool cannot read stops
+it with the line number and nothing is written.
+
 Every instruction gets its own comment {... ;} at the end of the line where
 its first byte stands, so the text between the braces assembles as it is.
 The trailing ' ;' (an empty assembler comment) is what marks the comment as
@@ -17,12 +20,17 @@ Element sizes follow Turbo Pascal 3: a constant is one byte when its value
 is 0..255 and a word otherwise, '<' forces a byte and '>' a word, and a
 variable or procedure name (or the location counter '*') is a word -- its
 address. Names are printed as they stand, so 'LD HL,addr' comes out for
-$21/addr. Relative jumps are printed as '$+n', counted from the address of
+$21/addr. A constant identifier is sized by its value like a literal; the
+tool knows the untyped constants declared in the same file ('const N = 5;'),
+a constant from another file it takes for a variable, i.e. a word. Elements
+may be sums and differences ($10+$20, addr-1, *+5) as in Turbo Pascal.
+Relative jumps are printed as '$+n', counted from the address of
 the jump itself.
 
 The file is handled as raw bytes (latin-1 in, latin-1 out): Kamenicky
 letters, CR-only line ends and ^Z padding come back unchanged.
 """
+import argparse
 import os
 import re
 import sys
@@ -32,6 +40,17 @@ from z180dis import dis
 
 MARK_END = ' ;}'     # closes an annotation and tells it from the author's
 RELATIVE = {0x10, 0x18, 0x20, 0x28, 0x30, 0x38}   # DJNZ, JR, JR cc
+# Words that end a const section.
+SECTION_END = {'begin', 'const', 'function', 'label', 'overlay', 'procedure',
+               'program', 'type', 'var'}
+
+
+class InlineError(ValueError):
+    """An inline element that cannot be read; pos is its offset in the text."""
+
+    def __init__(self, pos, message):
+        super().__init__(message)
+        self.pos = pos
 
 
 def scan(text):
@@ -119,15 +138,75 @@ def strip_annotations(text):
     return ''.join(out)
 
 
-def parse_number(t):
-    t = t.strip()
-    if t.startswith('$'):
-        return int(t[1:], 16)
-    if t.isdigit():
-        return int(t)
-    if len(t) == 3 and t[0] == t[2] == "'":
-        return ord(t[1])
-    return None
+TERM = re.compile(r"\s*([+-]?)\s*(\$[0-9A-Fa-f]+|\d+|'(?:[^']|'')'|\*|[A-Za-z_]\w*)\s*")
+
+
+def evaluate(t, consts):
+    """Return (value, names) of a code element: terms joined by + and -.
+
+    A name that is not a known constant is a variable (or '*'): its address
+    is unknown here, so it adds nothing to value and is listed in names.
+    """
+    value, names, pos = 0, [], 0
+    if not t.strip():
+        raise ValueError('empty element')
+    while pos < len(t):
+        m = TERM.match(t, pos)
+        if not m or (pos and not m.group(1)):
+            raise ValueError(f"cannot read element '{t}'")
+        term = m.group(2)
+        if term[0] == '$':
+            v = int(term[1:], 16)
+        elif term.isdigit():
+            v = int(term)
+        elif term[0] == "'":
+            v = ord(term[1])
+        elif term.lower() in consts:
+            v = consts[term.lower()]
+            if v is None:
+                raise ValueError(f"cannot compute constant '{term}', so its size is unknown")
+        else:
+            names.append(term)
+            v = 0
+        value += -v if m.group(1) == '-' else v
+        pos = m.end()
+    return value, names
+
+
+def find_constants(text):
+    """Map the lower-cased name of every untyped constant to its value.
+
+    Turbo Pascal 3 sizes a constant identifier in inline() by its value, the
+    same as a literal, so taking it for a variable (a word) would shift every
+    byte after it. Typed constants ('X: integer = 5') are variables and stay
+    out. A constant the tool cannot compute ('N*2', a string) maps to None,
+    so using it in inline() stops the tool instead of guessing.
+    """
+    tokens = [(k, text[s:e]) for k, s, e in scan(text)
+              if k != 'comment' and not (k == 'char' and text[s].isspace())]
+    consts, k = {}, 0
+    while k < len(tokens):
+        kind, t = tokens[k]
+        k += 1
+        if kind != 'word' or t.lower() != 'const':
+            continue
+        while (k + 1 < len(tokens) and tokens[k][0] == 'word'
+               and tokens[k][1].lower() not in SECTION_END
+               and tokens[k + 1][1] in ('=', ':')):
+            # The declaration ends at ';' outside parentheses: a typed record
+            # constant has ';' between its fields.
+            m, depth = k + 2, 0
+            while m < len(tokens) and (depth or tokens[m][1] != ';'):
+                depth += {'(': 1, ')': -1}.get(tokens[m][1], 0)
+                m += 1
+            if tokens[k + 1][1] == '=':
+                try:
+                    value, names = evaluate(''.join(t for _, t in tokens[k + 2:m]), consts)
+                except ValueError:
+                    value, names = None, []
+                consts[tokens[k][1].lower()] = None if names else value
+            k = m + 1
+    return consts
 
 
 def elements(text, lo, hi):
@@ -138,7 +217,8 @@ def elements(text, lo, hi):
         if kind == 'comment':
             continue
         if kind == 'char' and piece == '/':
-            parts.append((start, ''.join(cur)))
+            # An empty element is reported at its '/'.
+            parts.append((lo + 1 + s if start is None else start, ''.join(cur)))
             cur, start = [], None
             continue
         if kind == 'char' and piece.isspace():
@@ -151,7 +231,7 @@ def elements(text, lo, hi):
     return parts
 
 
-def assemble(parts):
+def assemble(parts, consts):
     """Turn elements into bytes. Names become numbered placeholder words.
 
     Returns (bytes, owner, symbols): owner[i] is the source offset of the
@@ -159,13 +239,14 @@ def assemble(parts):
     """
     data, owner, symbols = [], [], {}
     for where, t in parts:
-        if t == '':
-            raise ValueError(f'empty element at offset {where}')
         force = None
-        if t[0] in '<>':
+        if t[:1] in ('<', '>'):
             force, t = t[0], t[1:]
-        value = parse_number(t)
-        if value is not None:
+        try:
+            value, names = evaluate(t, consts)
+        except ValueError as e:
+            raise InlineError(where, str(e)) from None
+        if not names:
             size = 1 if (force == '<' or (force is None and 0 <= value <= 255)) else 2
             if size == 1:
                 data.append(value & 0xff)
@@ -201,17 +282,16 @@ def disassemble(data, symbols):
             continue
         # Fill every placeholder with a value that prints uniquely.
         buf = list(padded)
-        marks = {}
         for idx, (name, size) in symbols.items():
             if size == 2:
                 v = 0xA000 + idx
                 buf[idx], buf[idx + 1] = v & 0xff, v >> 8
-                marks[f'{v:04X}h'] = name
             else:
-                v = 0xA0 + (idx & 0x1f)
-                buf[idx] = v
-                marks[f'{v:02X}h'] = name
+                buf[idx] = 0xA0 + (idx & 0x1f)
         s, n = dis(buf, p)
+        if s.startswith('db '):
+            # z180dis writes an unknown ED opcode as 'db ED,4B', without 'h'.
+            s = 'db ' + ','.join(b if b.endswith('h') else b + 'h' for b in s[3:].split(','))
         o = data[p]
         if o in RELATIVE:
             d = data[p + 1] if p + 1 < len(data) else 0
@@ -229,6 +309,9 @@ def disassemble(data, symbols):
                 s = s.replace(fix_hex(txt), name)
             elif txt in s:
                 s = s.replace(txt, name)
+            elif size == 1 and f'{v - 256:+d})' in s:
+                # The displacement of (IX+d) and (IY+d) prints signed decimal.
+                s = s.replace(f'{v - 256:+d})', f'+{name})')
             else:
                 s += f' [{name}]'
         if p + n > len(data):
@@ -244,14 +327,23 @@ def line_end(text, pos):
     return j
 
 
+def line_number(text, pos):
+    return len(re.findall(r'\r\n|\r|\n', text[:pos])) + 1
+
+
 def annotate(text):
     text = strip_annotations(text)
+    consts = find_constants(text)
     inserts = {}       # line-end position -> list of instruction texts
     for lo, hi in find_inlines(text):
         parts = elements(text, lo, hi)
         if not parts:
             continue
-        data, owner, symbols = assemble(parts)
+        try:
+            data, owner, symbols = assemble(parts, consts)
+        except InlineError as e:
+            # Stripping keeps every line break, so the line is the source's.
+            raise ValueError(f'line {line_number(text, e.pos)}: {e}') from None
         # Positions inside comments of this statement must not get a comment.
         inside = [(lo + 1 + s, lo + 1 + e) for k, s, e in scan(text[lo + 1:hi]) if k == 'comment']
         for p, n, s in disassemble(data, symbols):
@@ -269,25 +361,35 @@ def annotate(text):
 
 
 def main(argv):
-    args = [a for a in argv if not a.startswith('-')]
-    flags = [a for a in argv if a.startswith('-')]
-    if len(args) < 1:
-        print(__doc__)
+    ap = argparse.ArgumentParser(prog='pasinline.py', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('source')
+    where = ap.add_mutually_exclusive_group()
+    where.add_argument('-o', dest='out', metavar='OUT')
+    where.add_argument('-i', dest='in_place', action='store_true')
+    ap.add_argument('--strip', action='store_true')
+    a = ap.parse_args(argv)
+    src = a.source
+    backup = os.path.splitext(src)[0] + '.BAK'
+    if a.in_place and os.path.normcase(os.path.abspath(backup)) == os.path.normcase(os.path.abspath(src)):
+        # The backup would overwrite the very file it is meant to keep.
+        print(f'{src}: the backup would be the file itself, use -o', file=sys.stderr)
         return 1
-    src = args[0]
     with open(src, 'rb') as f:
         text = f.read().decode('latin-1')
-    result = strip_annotations(text) if '--strip' in flags else annotate(text)
+    try:
+        result = strip_annotations(text) if a.strip else annotate(text)
+    except ValueError as e:
+        print(f'{src}: {e}', file=sys.stderr)
+        return 1
     raw = result.encode('latin-1')
-    if '-i' in flags:
-        with open(src + '.BAK' if '.' not in os.path.basename(src)
-                  else os.path.splitext(src)[0] + '.BAK', 'wb') as f:
+    if a.in_place:
+        with open(backup, 'wb') as f:
             f.write(text.encode('latin-1'))
         with open(src, 'wb') as f:
             f.write(raw)
-    elif '-o' in flags:
-        out = argv[argv.index('-o') + 1]
-        with open(out, 'wb') as f:
+    elif a.out:
+        with open(a.out, 'wb') as f:
             f.write(raw)
     else:
         sys.stdout.buffer.write(raw)
