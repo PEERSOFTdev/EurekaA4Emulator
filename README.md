@@ -79,7 +79,68 @@ ho emulátor nenájde, otvorí dialóg so zoznamom všetkých ciest, na ktorých
 hľadal, a skončí — čítačka obrazovky ten dialóg ohlási a prečíta, takže
 sa dá zistiť, kam súbor patrí, bez hádania.
 
-Podrobnosti o právach sú v `ROM-NOTICE.txt`.
+Podrobnosti o právach sú v `PRAVNE.md`.
+
+### Ako ROM vyčítať zo svojej Eureky
+
+Na to je program `DUMPROM.COM`, ktorý je v balíku vedľa emulátora. Spúšťa sa
+na skutočnej Eureke a zapíše jej firmvér na disketu, ktorá je v mechanike.
+Najprv ho však treba dostať na Eureku.
+
+**Sériovým káblom.** Je to najpriamejšia cesta. Eureku spojte s počítačom
+nulmodemovým káblom, k novšiemu počítaču cez USB adaptér na RS-232. Na
+Eureke spustite príjem súboru ako pri spojení dvoch Eurek: `F4`, `F3`
+a meno `DUMPROM.COM`. V počítači treba program, ktorý vie posielať súbory
+protokolom XMODEM:
+
+- **Tera Term** — ponuka File → Transfer → XMODEM → Send. Ak prenos
+  nezačne, skúste prepnúť voľbu Checksum a CRC.
+- **ExtraPuTTY** — doplnená verzia PuTTY s prenosom súborov. Samotné PuTTY
+  XMODEM nemá.
+- HyperTerminal zo starších Windows (naposledy vo Windows XP).
+
+Port nastavte tak, ako je nastavená Eureka v programe Komunikácia; po
+zapnutí je to 9600 bitov za sekundu, 8 dátových bitov, bez parity
+a 1 stop bit. Riadenie toku je RTS/CTS.
+
+**Disketou DOS.** Ak máte mechaniku, ktorá zapíše disketu DOS s kapacitou
+720 KB (aj externú, cez USB), nakopírujte na ňu `DUMPROM.COM`. Na Eureke ho
+z nej prenesie na bežnú disketu Eureky program DosRead (`DR.COM` alebo
+`DR12.COM`), ktorý používatelia Eureky poznajú. S emulátorom nie je
+dodávaný.
+
+**Hotovou disketou Eureky.** V balíku je aj `DUMPROM.IMG`, obraz diskety
+Eureky, na ktorej je len `DUMPROM.COM`. Na skutočnú disketu ho zapíše
+program SAMdisk (simonowen.com/samdisk), ktorým sa diskety Eureky bežne
+archivujú:
+
+```
+samdisk DUMPROM.IMG A:
+```
+
+`A:` je písmeno disketovej mechaniky. Mechanika musí byť pripojená
+k radiču diskiet v počítači; USB mechanika formát Eureky nezapíše. Takú
+disketu stačí vložiť do Eureky a program spustiť, nič sa neprenáša.
+
+**Spustenie.** Na Eureke vložte disketu s programom, na ktorej je aspoň
+330 KB voľného miesta, stlačte `Shift+F7`, napíšte `DUMPROM` a potvrďte
+Enterom. Program povie, na akom modeli beží, a „Reading, please wait“. Potom
+o každej z piatich bánk pamäte povie, čo v nej našiel — „data“, „empty“,
+„unstable“ alebo „same as bank“ s číslom — a nakoniec „Done“.
+
+Čo zapíše, záleží od stroja:
+
+- **`A4ROM.DMP`**, 262 144 bajtov — firmvér, ktorý emulátor spustí. Takú
+  ROM majú všetky známe Eureky okrem jedného variantu. Súbor preneste do
+  počítača tou istou cestou späť a položte ho vedľa `EurekaA4Emulator.exe`.
+- **`A4ROM256.DMP`**, 327 680 bajtov — ROM na starších čipoch 27C256, ktorú
+  emulátor zatiaľ nespúšťa. Program to povie. Súbor si odložte: je to
+  podklad na to, aby ju emulátor raz spúšťať mohol.
+- Ak rozloženie pamäte nespozná, povie „Unknown ROM layout“ alebo
+  „Unexpected memory map“ a nezapíše nič.
+
+Firmvér z vlastného stroja je len pre vás. Nikomu ho neposielajte, ani
+majiteľovi inej Eureky — viď `PRAVNE.md`, bod 4.
 
 ## Rýchly štart
 
@@ -1052,7 +1113,7 @@ s návratovým kódom 2 a povie to.
 Emulátor je pod licenciou MIT; pozrite `LICENSE.txt`. Štyri veci k tomu:
 
 - **ROM nie je súčasťou licencie zdrojového kódu** a v repozitári nie je;
-  pozrite `ROM-NOTICE.txt`.
+  pozrite `PRAVNE.md`.
 - **Doplnok v `nvda-addon\` je pod GPL v2+**, lebo NVDA považuje doplnky
   za odvodené dielo; pozrite `nvda-addon\COPYING.txt`.
 - Použité jadro Z80 má vlastné MIT oznámenie

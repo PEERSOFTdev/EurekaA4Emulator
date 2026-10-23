@@ -346,7 +346,7 @@ them on the same diskette.
 The test disk folder must contain a native Eureka `READ.COM` and `BEEP.BAS`.
 A genuine `READ.COM` ships with the Technical Manual's development disk, which
 is third-party material and therefore **not in this repository** -- see
-`ROM-NOTICE.txt`.  Point `EUREKATECH` at your copy of that folder (the default
+`PRAVNE.md`.  Point `EUREKATECH` at your copy of that folder (the default
 is `C:\b\eurekatech`) and `run-tests.bat` copies the file in for you.
 `BEEP.BAS` it does not copy, and nothing else does: `bas` then loads nothing
 ("soubor nelze najít, chyba 21") and still passes. That predates the drive

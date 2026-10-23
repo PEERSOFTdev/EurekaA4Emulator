@@ -1097,6 +1097,50 @@ void FileTypeClassificationIsPinned() {
         "klasifikacia_typov_je_pribita", wrong);
 }
 
+// DUMPROM.IMG is written by tools/dumprom/build.sh with its own copy of the
+// sector interleave, in SAMdisk's order: every track of head 0, then head 1,
+// sectors by ID.  Laid onto a diskette sector by sector through the
+// controller's view, it has to hold DUMPROM.COM and nothing else -- otherwise
+// one of the two interleave tables is wrong and the image written to a real
+// floppy would be unreadable on the machine.  Paths are relative to the
+// repository root, where make runs this test.
+void DumpromImageHoldsTheProgram() {
+  const std::vector<uint8_t> image = ReadAll("tools/dumprom/DUMPROM.IMG");
+  const std::vector<uint8_t> program = ReadAll("tools/dumprom/DUMPROM.COM");
+  if (!Check(image.size() == 819200 && !program.empty(), "dumprom_obraz_sa_nacita",
+             "obraz " + std::to_string(image.size()) + " B, program " +
+                 std::to_string(program.size()) + " B"))
+    return;
+
+  VirtualDisk disk;
+  disk.CreateEmpty();
+  bool written = true;
+  std::size_t offset = 0;
+  for (unsigned side = 0; side < 2; ++side)
+    for (unsigned cylinder = 0; cylinder < 80; ++cylinder)
+      for (unsigned sector = 1; sector <= 10; ++sector, offset += 512)
+        written = disk.WritePhysicalSector(cylinder, side, sector,
+                                           image.data() + offset) && written;
+  if (!Check(written && disk.StoredFiles() == 1, "dumprom_obraz_ma_jeden_subor",
+             "v adresari " + std::to_string(disk.StoredFiles())))
+    return;
+
+  const fs::path target = MakeFolder("dumprom-export");
+  std::wstring error;
+  if (!Check(disk.SaveAs(target, error), "dumprom_obraz_sa_ulozi", Narrow(error)))
+    return;
+  // A .COM is exported in whole records, so the program is followed by the
+  // ^Z padding of its last record and by nothing else.
+  const std::vector<uint8_t> exported = ReadAll(target / "DUMPROM.COM");
+  const bool same =
+      exported.size() == (program.size() + 127) / 128 * 128 &&
+      std::equal(program.begin(), program.end(), exported.begin()) &&
+      std::all_of(exported.begin() + program.size(), exported.end(),
+                  [](uint8_t byte) { return byte == 0x1a; });
+  Check(same, "dumprom_obraz_nesie_dumprom_com",
+        "vyexportovanych " + std::to_string(exported.size()) + " B");
+}
+
 void EmptyFolderAndMissingFolder() {
   const fs::path folder = MakeFolder("prazdny");
   VirtualDisk disk;
@@ -1694,6 +1738,7 @@ int main() {
   SavingAnUnsavedDisketteGivesItAHome();
   RamDisketteKeepsBinaryFilesWhole();
   FileTypeClassificationIsPinned();
+  DumpromImageHoldsTheProgram();
   EmptyFolderAndMissingFolder();
 
   LayoutFillsToTheLastBlock();

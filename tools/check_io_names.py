@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HEADER = os.path.join(ROOT, 'src', 'eureka_io.h')
 
 # eurekatech/ holds Robotron's and Borland's material, so it is not in the
-# repository -- the same arrangement the ROM already has, see ROM-NOTICE.txt.
+# repository -- the same arrangement the ROM already has, see PRAVNE.md.
 # The fallback is where it sits on the author's machine, matching how
 # run-tests.bat falls back to C:\b\a4rom.dmp for the ROM.
 EUREKATECH = os.environ.get('EUREKATECH') or r'C:\b\eurekatech'

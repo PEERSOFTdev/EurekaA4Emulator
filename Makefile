@@ -222,7 +222,7 @@ $(BIN)/integration_test.exe: $(BUILD)/test_integration_test.o $(SESSION_OBJS) $(
 # run-tests.bat: kopirovanie sa v neutralnom recepte spravit neda a rezim
 # `com` bez prveho READ.COM z Technical Manualu zlyha.
 #
-# Manual je material tretich stran a v repozitari nie je (ROM-NOTICE.txt).
+# Manual je material tretich stran a v repozitari nie je (PRAVNE.md).
 # Ked ho run-tests.bat nenajde, nastavi v PROSTREDI SKIP_MODES na `com wp` --
 # READ.COM potrebuju oba, `wp` nim overuje citanie z chranenej diskety.
 # Testov je potom dvadsatjeden, nie dvadsattri. Prostredim a nie argumentom preto,

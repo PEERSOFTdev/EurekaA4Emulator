@@ -754,6 +754,10 @@ namespace {
 // the export all address it by record -- so only the controller's view goes
 // through this.  Without it the driver read every sector from the wrong place
 // and no program would load.
+//
+// tools/dumprom/build.sh holds a second copy of kLogical to write
+// DUMPROM.IMG; disk_test reads that image back through this function
+// (DumpromImageHoldsTheProgram), so the two cannot drift apart unnoticed.
 std::size_t SectorOffset(unsigned cylinder, unsigned side, unsigned sector) {
   static constexpr unsigned kLogical[10] = {3, 0, 7, 4, 1, 8, 5, 2, 9, 6};
   return ((cylinder * 2 + side) * 10 + kLogical[sector - 1]) * 512;

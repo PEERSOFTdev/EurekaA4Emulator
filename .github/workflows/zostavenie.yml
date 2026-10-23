@@ -5,8 +5,9 @@
 # build.bat, build-tests.bat a build-addon.bat ako na stroji majiteľa, a doplnok
 # NVDA linuxový náprotivok nemá a mať nemá (CLAUDE.md). msys2 je na runneri
 # predinštalovaný v C:\msys64, takže predvolené cesty v dávkach platia.
+# Výnimkou je úloha dumprom na konci: assembler Z80 je balík pre Ubuntu.
 #
-# ROM sem nepatrí ani ako tajný súbor -- je to firmvér (ROM-NOTICE.txt). Bežia
+# ROM sem nepatrí ani ako tajný súbor -- je to firmvér (PRAVNE.md). Bežia
 # preto len šesť testov, ktoré ju nepotrebujú; osemnásť režimov
 # integration_test zostáva na run-tests.bat.
 
@@ -121,3 +122,25 @@ jobs:
             bin/eurekaA4Emulator.nvda-addon
           if-no-files-found: error
           retention-days: 30
+
+  # DUMPROM.COM a DUMPROM.IMG sú commitnuté a vydanie ich balí tak, ako sú
+  # (HANDOFF 6.55). Kto zmení dumprom.s a nespustí build.sh, vydanie by ticho
+  # nieslo starý program; tu sa preto zostavia nanovo a musia sa zhodovať bajt
+  # na bajt. Ubuntu 24.04 napevno: jeho binutils-z80 (2.38) je to, čím sa
+  # zostavuje lokálne, a iná verzia assemblera by mohla dať iné bajty.
+  dumprom:
+    name: DUMPROM zo zdroja
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Zdrojáky
+        uses: actions/checkout@v5
+
+      - name: Assembler Z80
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binutils-z80
+
+      - name: Zostavenie a porovnanie
+        run: |
+          tools/dumprom/build.sh
+          git diff --exit-code --stat -- tools/dumprom/DUMPROM.COM tools/dumprom/DUMPROM.IMG

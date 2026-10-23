@@ -8,7 +8,7 @@ Two things this project uses are deliberately NOT in the repository and are
 not covered by any licence here: the ROM dump, and the Eureka A4 Technical
 Manual with its development disk (Robotron, and Turbo Pascal from Borland).
 Both are supplied by whoever runs the emulator, from their own machine.
-See ROM-NOTICE.txt.
+See PRAVNE.md (in Slovak) for the project's legal position.
 
 Copyright (c) 2026 Eureka A4 Emulator contributors
 

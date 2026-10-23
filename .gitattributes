@@ -26,7 +26,7 @@
 
 # Tu stavalo `eurekatech/** -text`, ktore chranilo dobove subory z roku 1992
 # pred konverziou koncov riadkov. Priecinok je od 20. 9. 2026 mimo
-# repozitara (ROM-NOTICE.txt), takze pravidlo nema co chranit. Keby sa sem
+# repozitara (PRAVNE.md), takze pravidlo nema co chranit. Keby sa sem
 # niekedy vratil, patri mu vlastne pravidlo a musi byt POSLEDNE: pri zhode
 # viacerych vzorov vyhrava ten nizsie, takze len tak prebije `* text=auto`.
 
@@ -34,3 +34,8 @@
 # ich podla nulovych bajtov uznal za binarne aj sam, ale to je odhad; tu je to
 # napisane. Posledne z toho isteho dovodu ako vyssie.
 *.wav binary
+
+# Program a obraz diskety, ktoré vyčítajú ROM zo skutočnej Eureky (HANDOFF
+# 6.55). Ten istý dôvod: nulové bajty v nich sú dnes, nie zárukou.
+tools/dumprom/DUMPROM.COM binary
+tools/dumprom/DUMPROM.IMG binary

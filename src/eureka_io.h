@@ -9,7 +9,7 @@
 // the manual's own sources and the question of what a bit means is then
 // settled by the manufacturer rather than by whoever wrote the code.  The
 // manual is third-party material and therefore not in this repository: set
-// EUREKATECH to your copy of it (see ROM-NOTICE.txt), and read the file names
+// EUREKATECH to your copy of it (see PRAVNE.md), and read the file names
 // below as relative to that.
 //
 // Four sources, in descending order of authority for this machine:

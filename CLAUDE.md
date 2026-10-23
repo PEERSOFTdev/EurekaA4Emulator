@@ -92,7 +92,7 @@ volanie, hľadaj najprv tam.
 
 Pozor: obsah toho priečinka je materiál tretích strán (Robotron
 a Borland) a MIT licencia projektu sa naň nevzťahuje. Viď `PUVOD.md`
-v ňom a `ROM-NOTICE.txt` tu. **Nekopíruj z neho súbory do repozitára** —
+v ňom a `PRAVNE.md` tu. **Nekopíruj z neho súbory do repozitára** —
 to je presne tá cesta, ktorou by sa do zverejneného stromu vrátili.
 
 ### Čísla portov a bitov sú v `src/eureka_io.h`, s menami z manuálu
@@ -333,6 +333,11 @@ prekladanie (`SectorOffset`). Adresár je preto **fyzický sektor 2**, nie 1 —
 test to má v `PhysicalSector` a `kDirectorySector`. Bez prekladania sa cez
 ovládač z ROM nenačíta ani jeden program a so skratkou to nie je počuť;
 mutácia na poradie bez prekladania zhodí 22 kontrol.
+
+Drží aj **obraz `tools/dumprom/DUMPROM.IMG`** (HANDOFF 6.55): zapíše ho cez
+radič a overí, že nesie práve `DUMPROM.COM`. `build.sh` má vlastnú kópiu
+tabuľky prekladania a toto je jediné, čo ju porovná so `SectorOffset`. Cesty
+sú voči koreňu repozitára, odkiaľ ho púšťa `make`.
 
 Drží aj **klasifikáciu typov súborov pri exporte**, a to je jediné, čo ju
 drží. `VirtualDisk::IsTextType` je allowlist a jeho dve chyby stoja rôzne:
