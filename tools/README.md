@@ -8,6 +8,7 @@ inak na `C:\b\a4rom.dmp`.
 | `z180dis.py` | disassembler Z80/Z180 (knižnica, importuje sa) |
 | `z180len.py` | dĺžky inštrukcií (knižnica) |
 | `dis.py LO:HI [LO:HI …]` | disassembluje rozsahy fyzických adries |
+| `pasinline.py ZDROJ.PAS [-o VYSTUP] [-i] [--strip]` | k bajtom v `inline(...)` v zdrojáku Turbo Pascalu pripíše disassembler ako komentáre `{LD BC,0901h ;}`, každú inštrukciu zvlášť, takže text medzi zátvorkami sa dá rovno preložiť. Koncové ` ;` (prázdny komentár assemblera) je značka nástroja: opakovaný beh nahradí a `--strip` odstráni len také komentáre, nikdy autorove. Konštanty z `const` v tom istom súbore pozná a meria podľa hodnoty ako Turbo Pascal; konštantu z iného súboru berie ako premennú (slovo). Prvok, ktorý nevie prečítať, ohlási s číslom riadku a nezapíše nič. ROM nepotrebuje |
 | `strings_kam.py MIN LO HI` | reťazce s dekódovaním Kamenických/KEYBCS2 |
 | `rommap.py` | entropia a zloženie ROM po 4 KB blokoch |
 | `ports.py` | mapa I/O portov lineárnym rozmetaním inštrukcií |
