@@ -4527,6 +4527,9 @@ zostáva nesprávne. `READ.COM` 6,33 s platí — meralo ho `@`, nie súčet.
   vybral 0,3; pri 0,5 už motor prekrýval. Hrabanie (`presun`) zostáva na
   úrovni sady, majiteľovi znie dobre. `drive_sound_test` hlasitosť drží
   (`kLoopAndStep`); hodnota 0,5 zhodí dve kontroly.
+  *Doplnené 24. 10. 2026: neplatí, `kStepGain` je 1* — 0,3 patrilo
+  k očisteným krokom cudzej mechaniky; nahrávky Eureky majú vlastný pomer
+  (viď „Nahrávky skutočnej Eureky“ nižšie).
 - **Krátky presun zatiaľ nikto nepočul.** Presun o 2 cylindre pri 6 ms za
   krok hrá hrabanie len 12 ms a 15 ms doznievania. Pri `READ.COM` sú dva
   také (2 → 0 → 2, jeden sektor na cylindri 0, dôvod zatiaľ nevyšetrený).
@@ -4591,7 +4594,8 @@ Druhý dôvod je licencia: motor je CC BY a EXE ho nesie zabudovaný, ale
 zdrojákoch. Rozbaľovanie sady z emulátora sa zvážilo a zamietlo — nová
 položka ponuky a kód na to, čo urobí priečinok v balíku. Zmena workflowu
 **nie je vyskúšaná** — overí ju až najbližšie vydanie (v ZIP-e má byť
-priečinok `zvuky-mechaniky` s deviatimi súbormi).
+priečinok `zvuky-mechaniky` s deviatimi súbormi). *Od 24. 10. 2026 je ich
+sedem: päť WAV zo skutočnej Eureky, `NAVOD.md` a `PUVOD.md`.*
 
 Najbližšie vydanie (9. 10. 2026, beh 37903805526, `v2026.10.3`) ju naozaj
 nepustilo: krok „Balík“ prešiel, ale **poistka proti ROM** v tom istom
@@ -4602,6 +4606,46 @@ v `zvuky-mechaniky/` — podpriečinok tam neprejde — a kontrola veľkosti
 262144 a mien `.dmp`, `.rom`, `a4rom` platí aj pre ne. Podmienka overená
 na menách z toho behu aj na šiestich, ktoré musia ďalej zlyhať; celý
 workflow overí až ďalšie vydanie.
+
+#### Nahrávky skutočnej Eureky (24. 10. 2026)
+
+Luboš Krejča nahral mechaniku skutočnej Eureky A4 (majiteľ je s ním
+v spojení; licencia MIT ako projekt, `PUVOD.md`). Surové nahrávky v strome
+nie sú — sú majiteľove, ležia v pracovnom priečinku `eureka jednotka/` mimo
+gitu. Formát mali hneď správny (WAV PCM 48 kHz mono 16 bit), treba ich bolo
+len rozstrihať; urobí to `tools/sada-mechaniky.sh` cez `ffmpeg`, bajtovo
+rovnako ako v strome (overené `cmp`).
+
+Čo nahrávky ukázali, zmerané čistým Pythonom v scratchpade:
+
+- **Hrabanie klepe podľa rýchlosti kroku WD1772.** Autokorelácia obálky
+  klepania: `pohyb1` 6 ms (rýchlosť ROM), `pohyb5` a `pohyb6` 12 ms,
+  `pohyb2` až `pohyb4` 2 až 4 ms. Dĺžky sedia s presunom cez celú disketu
+  a kus späť (0,56 s ≈ 93 krokov po 6 ms, 1,15 s ≈ 96 po 12 ms). Majiteľov
+  odhad, že ostatné nahral DiskEdit, ktorý mení rýchlosť kroku, tým sedí.
+  Emulátor podľa `stepRate` mení len dĺžku hrabania, nie jeho klepanie —
+  na to by bolo treba hrabanie pre každú rýchlosť (zatiaľ nie).
+- **Motor sa roztočí takmer hneď.** Dominantná frekvencia (~200 Hz) je od
+  začiatku „Diskove funkce“ rovnaká, ráz zapnutia je okolo 0,1 s; rozbeh
+  v sade má preto 0,3 s, nie sekundu.
+- **Doběh:** tón klesne z 200 na 180 Hz asi 1,75 s po kroku (1,15 s → 2,9 s),
+  čo sedí s 9 otáčkami motora po príkaze (krok 4b). Hlasitosť však začne
+  klesať už asi 0,75 s po kroku, prečo, nie je zmerané.
+- **Krok v „Diskove funkce“ sú dva údery 50 ms od seba** (1,175 s a
+  1,225 s), asi prvý pohyb po roztočení. Hraný na striedačku s obyčajným
+  krokom robil z každého druhého kroku formátovania dvojitý — majiteľ to
+  počul ako „znásobený“ krok. V sade je preto jediný krok, `Pohyb7`
+  (`pohyb8` je ten istý záber, posunutý o 209 vzoriek, rozdiel na úrovni
+  šumu). `KROK_2` a `KROK_3` zo zdrojov EXE zmizli.
+- **`pohyb9` a `pohyb10` (len motor) sú asi o 11 dB tichšie** než motor
+  v „Diskove funkce“, teda iné nastavenie nahrávania; nepoužité.
+
+**`kStepGain` je späť na 1** (zrušené 0,3 z kroku 4c): sada je jedna
+mechanika vo vlastnom pomere, tichý motor pod jasným krokom (krok asi 5×
+nad slučkou), a majiteľ ju tak pamätá. Z variantov 0,3 a 1,0 vybral 1,0.
+`drive_sound_test` to drží cez `kLoopAndStep`. Celá sada je zosilnená
+spoločným ziskom 1,4 — viac nejde, krok z „Diskove funkce“ by sa orezal —
+a `kSampleGain` 0,25 zostal; slučka (rms ~660) je blízko starej (~800).
 
 #### Otvorené
 
@@ -4615,6 +4659,9 @@ workflow overí až ďalšie vydanie.
   a „poškodená disketa“ (`ea4-tvd.5`).
 - Skutočné nahrávky mechaniky Eureky — majiteľ je v kontakte s niekým, kto
   ich môže nahrať; sada sa potom len vymení v `src/res/zvuky-mechaniky`.
+  *Doplnené 24. 10. 2026: hotové, viď „Nahrávky skutočnej Eureky“.* Ďalšie
+  nahrávky podľa potreby — najviac by pomohol dobeh až do zastavenia
+  a motor naprázdno s nastavením nahrávania ako „Diskove funkce“.
 
 ### 6.55 Dump ROM z anglickej Eureky — program, ktorý rozozná stroj
 

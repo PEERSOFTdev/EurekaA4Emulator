@@ -516,8 +516,8 @@ bez kroku sa odmietne s dôvodom, ktorý menuje súbor. Overené mutáciou:
 mechanika bez čakania na DAC, motor, ktorý nezastane, a prázdne `Continue`
 zhodia každé svoje kontroly. Zapnutie a vypnutie zvuku žije vo vlákne
 emulátora a toto ho nedrží. Drží aj **hlasitosť jedného kroku** voči slučke
-(`kStepGain` = 0,3, výber majiteľa, HANDOFF 6.54 krok 4c); 0,5 zhodí dve
-kontroly. Drží aj **skutočný čas** (`SetRealTime`, verná mechanika,
+(`kStepGain` = 1 od nahrávok skutočnej Eureky, 24. 10. 2026; predtým 0,3,
+HANDOFF 6.54) cez `kLoopAndStep`. Drží aj **skutočný čas** (`SetRealTime`, verná mechanika,
 `PlaysInRealTime`): mechanika mlčí do prvej udalosti, krok zaznie hneď —
 bez vlastného roztáčania a aj pod rečou, lebo to už odčakal radič a firmvér
 — a motor zastane 1,8 s po poslednej udalosti. Overené mutáciou: čakanie na

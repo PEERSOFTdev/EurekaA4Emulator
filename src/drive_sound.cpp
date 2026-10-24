@@ -85,7 +85,10 @@ constexpr float kSampleGain = 0.25f;
 // it for a moment -- the owner heard it as a recording cut in (4. 10. 2026).
 // Of 1, 0.5 and 0.3 he chose 0.3: the step still stands out, and at 0.5 it
 // already seemed to cover the motor.  The raking keeps the set's level.
-constexpr float kStepGain = 0.3f;
+// Back to 1 with the recordings of a real Eureka (24. 10. 2026): they are one
+// drive in its own proportions, a quiet motor under a clear step, and the
+// owner remembers it exactly so.  Kept as a knob for a set that needs one.
+constexpr float kStepGain = 1.0f;
 constexpr uint32_t kCrossfade = Ms(10);
 constexpr uint32_t kSeekRelease = Ms(15);
 
