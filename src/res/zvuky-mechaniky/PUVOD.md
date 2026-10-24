@@ -1,25 +1,40 @@
 # Pôvod zvukov disketovej mechaniky
 
-Zvuky sú nahrávky skutočných 3,5" mechaník, nie mechaniky Eureky A4. Tú
-zatiaľ nikto nenahral; keď sa to stane, nahradí táto sada (HANDOFF 6.54).
-Všetky súbory sú WAV, 48 kHz, mono, 16 bit. Ako vznikli zo zdrojov, je
-zapísané do posledného čísla v HANDOFF 6.54 („Zvolená sada, verzia 8“).
+Zvuky sú nahrávky **skutočnej disketovej mechaniky Eureky A4**. Nahral ich
+**Luboš Krejča**. Všetky súbory sú WAV, 48 kHz, mono, 16 bit.
 
-Licencia projektu (MIT) sa na tieto súbory nevzťahuje. Platí licencia ich
-autorov:
+## Licencia
 
-| súbory | zdroj | autor | licencia |
-|---|---|---|---|
-| `motor-rozbeh.wav`, `motor-slucka.wav`, `motor-dobeh.wav` | `spindle.wav` zo vzoriek Flopster, mechanika NEC FD1231H; utlmené výšky a klapanie | Shiru (2017) | [CC BY](https://creativecommons.org/licenses/by/4.0/) |
-| `krok-1.wav`, `krok-2.wav`, `krok-3.wav` | „Floppy drive sounds.ogg“ z Wikimedia Commons; vystrihnuté kroky s odčítaným šumom točenia | AlepouTheFox (2013) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| `presun.wav` | „Floppy disk (3.5"), reading“ z BigSoundBank (zvuk č. 1396); dva úseky hrabania hlavičky | Joseph Sardin | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+Nahrávky sa šíria pod rovnakou licenciou ako celý projekt, **MIT**
+(`LICENSE.txt` v koreni). Autorom nahrávok je Luboš Krejča.
 
-Odkazy na pôvodné nahrávky:
+Autor s tým súhlasil v októbri 2026, ústne, v rozhovore s majiteľom
+projektu: súhlasí, aby sa nahrávky stali súčasťou projektu a šírili sa
+pod licenciou MIT, a želá si, aby sa pri nich uvádzalo jeho meno.
 
-- Flopster: <https://github.com/linuxmao-org/shiru-plugins> (`reference/flopster-1.01/samples`), autor <http://shiru.untergrund.net/>
-- Wikimedia Commons: <https://commons.wikimedia.org/wiki/File:Floppy_drive_sounds.ogg>
-- BigSoundBank: <https://bigsoundbank.com/detail-1396-floppy-disk-3-5-reading.html>
+## Ako vznikli
 
-Zmeny oproti originálom (CC BY ich vyžaduje uviesť): zo `spindle.wav` je
-prevzorkovaný a pásmovou priepusťou nad 1500 Hz a kompresorom stlmený motor,
-rozdelený podľa značiek slučky v pôvodnom súbore.
+Z nahrávok autora ich vystrihol skript `tools/sada-mechaniky.sh`
+(`ffmpeg`), ktorý z tých istých nahrávok zostaví bajtovo rovnakú sadu.
+Celá sada je zosilnená jedným spoločným ziskom 1,4, takže zvuky medzi
+sebou zostali v pomere, v akom zneli na stroji:
+
+- `motor-rozbeh.wav` — prvých 0,3 s nahrávky „Diskove funkce“, so zapnutím
+  motora;
+- `motor-slucka.wav` — 0,3 až 1,05 s tej istej nahrávky, ustálený motor
+  pred krokom; jej koniec je prelínaný so začiatkom, aby sa dala hrať
+  dookola;
+- `motor-dobeh.wav` — 2,0 s až koniec tej istej nahrávky, kde motor slabne;
+  nahrávka končí skôr než motor, preto sa na konci stlmí;
+- `krok-1.wav` — nahrávka „Pohyb7“, jeden krok hlavičky;
+- `presun.wav` — nahrávka „pohyb1“, hrabanie hlavičky pri rýchlosti kroku
+  6 ms, ktorú používa ROM.
+
+Podrobnosti aj meranie, ktoré k výberu viedlo, sú v HANDOFF 6.54.
+
+## Predchádzajúca sada
+
+Do 24. 10. 2026 tu bola sada z cudzích 3,5" mechaník (motor zo vzoriek
+Flopster od autora Shiru pod licenciou CC BY, kroky z Wikimedia Commons
+a hrabanie z BigSoundBank pod CC0). Je v histórii gitu, naposledy
+v commite `2af55a9`; jej pôvod a licencie sú v tamojšom `PUVOD.md`.

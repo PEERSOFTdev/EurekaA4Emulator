@@ -35,10 +35,9 @@ class DriveSound {
   // loop, run-down), krok-1, krok-2 and on (takes of one head step, played in
   // turn) and presun (the head raking across many cylinders).  Recordings
   // because the synthesis never satisfied the owner (HANDOFF 6.54); the
-  // built-in set is a motor sampled by Shiru (CC-BY), steps cut from a
-  // Wikimedia Commons recording and the raking from BigSoundBank (both CC0).
-  // False
-  // with a reason if anything is missing; the synthesized sound then stays.
+  // built-in set is Luboš Krejča's recordings of a real Eureka A4 drive.
+  // False with a reason if anything is missing; the synthesized sound then
+  // stays.
   // The reason is meant for the user and is UTF-8.
   bool LoadSamples(const std::filesystem::path& folder, std::string& error);
   // The same set from anywhere: `fetch` is given a sound's stem

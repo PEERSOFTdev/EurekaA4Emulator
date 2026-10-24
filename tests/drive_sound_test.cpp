@@ -37,10 +37,10 @@ void Check(bool passed, const std::string& name, const std::string& detail = "")
 
 constexpr uint32_t kRate = EurekaMachine::kAudioHz;
 constexpr uint64_t kCyclesPerSample = EurekaMachine::kCpuHz / EurekaMachine::kAudioHz;
-// The test step is five times the loop, and a single step plays at 0.3 of
-// the set's level (kStepGain in drive_sound.cpp), so loop and step together
-// stand at 2.5 loops.
-constexpr double kLoopAndStep = 1 + 5 * 0.3;
+// The test step is five times the loop, and a single step plays at the
+// set's own level (kStepGain in drive_sound.cpp, 1 since the recordings of a
+// real Eureka), so loop and step together stand at six loops.
+constexpr double kLoopAndStep = 1 + 5 * 1.0;
 
 std::size_t At(double seconds) { return static_cast<std::size_t>(seconds * kRate); }
 
