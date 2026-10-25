@@ -205,6 +205,11 @@ zápisom `00h`. Pamäť Eureky je statická (`HARDWARE.1`: „CMOS static memory
 devices are used exclusively“), takže obnovovanie jej nič nedáva a len
 berie takty. Z BASICu ho `OUT 54,252` zapne späť (HANDOFF 6.45).
 
+Nepoužité bity sa čítajú ako jednotky: `rcr` po štarte číta `3Ch`, `icr`
+(port `3Fh`) `1Fh`. Na `3Eh` je `OMCR` Z80180 — `IOREG.LIB` ho nepozná, ale
+skutočný stroj odpovedá `FFh` po zapnutí a `5Fh` po `OUT 62,1`. Firmvér naň
+nesiaha. Odmerané na skutočnej Eureke (HANDOFF 6.58).
+
 Čo dáva na horný bajt ktorá inštrukcia (UM005004, tabuľka 46):
 
 - `00h` — `IN0`, `OUT0`, `TSTIO` a blokové `OTIM`, `OTDM`, `OTIMR`, `OTDMR`.

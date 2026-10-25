@@ -3363,6 +3363,10 @@ Overené dvoma mutáciami — interval rátaný len z taktov programu zhodí `FC
 register nie je; na Z80180 je tam `OMCR`, ktorý o rýchlosti nerozhoduje.
 Veta „tá šestka zrýchľuje“ nie je jasná — treba sa spýtať.
 
+**Polovica rozhodnutá (25. 10. 2026, 6.58):** register na `3Eh` skutočná
+Eureka má — po `OUT 62,1` číta `5Fh`, po zapnutí `FFh` — a emulátor ho odvtedy
+drží aj číta. Či a ako mení rýchlosť, je otvorené ďalej v 6.58.
+
 ### 6.46 CHESS.COM — rýchlosť emulátora proti spomienke na skutočný stroj
 
 Podnet: `CHESS.COM` (34 816 B, mimo repozitára v `C:\b\diskety\com`).
@@ -4971,6 +4975,49 @@ nasledujúceho „a“ urobí rovno „1“ (`131h`).
 Mimo repozitára ležia skript majiteľa na meranie klávesnice
 (`C:\b\akordy-test.ps1`) a dočasná sonda s tokenmi `h:`, `r:`, `run:`
 a `runw:` (`C:\b\ea4-atx`).
+
+### 6.58 Nepoužité bity RCR, ICR a OMCR sa čítajú ako jednotky
+
+**Odkiaľ to je.** Balík opráv od Jiřího Zadražila (23. 10. 2026, mimo
+repozitára), postavený nad `v2026.10.3`. Jeho súčasťou je `EUTEST13.TXT`,
+výpis testovacieho programu spusteného na **skutočnej** Eureke kamaráda,
+ktorý pred meraním aj po každej etape vypíše porty 50, 54, 62 a 63. ROM je
+tá istá ako naša (SHA-256 `bde51032…` = MD5 `9aa101ab…`).
+
+**Čo stroj prečítal** a čo emulátor čítal dovtedy:
+
+- port 54 (RCR) po štarte, keď doň firmvér na `00018` zapísal `00h`:
+  `3Ch`; emulátor `00h`. Po `OUT 54,252`: `FCh`.
+- port 63 (ICR) po štarte, firmvér zapísal `00h` na `0001C`: `1Fh`;
+  emulátor `00h`.
+- port 62 (`3Eh`) po zapnutí: `FFh`, po `OUT 62,1`: `5Fh`, po `OUT 62,255`
+  zase `FFh`; emulátor `00h`, lebo tam register nemal.
+
+Všetko sedí so Zilogom (UM005004): v RCR sú nepoužité bity 5–2, v ICR 4–0,
+a na `3Eh` má Z80180 `OMCR` s M1E v bite 7, M1TE v bite 6 (len zápis), IOC
+v bite 5 a nepoužitými bitmi 4–0. Čítanie teda vráti bity 7 a 5 a inde
+jednotky — pre `01h` presne `5Fh`. Firmvér na `3Eh` nesiaha (v ROM nie je
+`OUT0 (3Eh)` ani `IN0 A,(3Eh)`), takže po štarte zostáva hodnota z resetu.
+
+**Čo sa zmenilo.** `ReadPortInner` k uloženej hodnote priORuje
+`hw::kRcrReadOnes`, `hw::kIcrReadOnes` a `hw::kOmcrReadOnes`; `PowerOn`
+nastaví `io_[hw::kOmcr]` na `FFh`. Zápis sa nemení — do `io_` ide tak, ako
+prišiel, a model obnovovania sa pýta práve jeho, nie čítanej hodnoty.
+
+Vedľajší účinok, ktorý stojí za zapísanie: `CheckRefreshCycles` si RCR
+odkladá cez `debug_in` a na konci ho zapíše späť, teraz teda `3Ch` namiesto
+`00h`. Je to neškodné (REFE zostáva nula) a robí to aj skutočný stroj, keď
+BASIC napíše `OUT 54,INP(54)`.
+
+Drží to `CheckRegisterReadback` v režime `dc` (`citanie=`) a berie len
+hodnoty, ktoré stroj naozaj prečítal, nič odvodené len z manuálu. OMCR ide
+prvý, aby čítal hodnotu z resetu. Overené mutáciou: čítanie bez
+priORovania zhodí OMCR, RCR aj ICR, chýbajúci reset `FFh` zhodí „OMCR po
+zapnutí“.
+
+**Otvorené:** čo `OMCR` robí s časovaním. Ten istý balík tvrdí, že
+`OUT 62,1` stroj zrýchli (vypne čakací stav na M1), a dokladá to časmi
+z EUTEST10/13. To je samostatná zmena modelu jadra a posudzuje sa zvlášť.
 
 ## 7. Nástroje
 

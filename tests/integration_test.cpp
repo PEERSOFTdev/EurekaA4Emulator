@@ -1919,6 +1919,37 @@ bool CheckInternalRegistersNeedZeroHighByte(EurekaMachine& machine) {
   return ok;
 }
 
+// The unused bits of RCR, ICR and OMCR read as ones on the real Eureka
+// (HANDOFF 6.58).  Every value here is one EUTEST13 read on the machine;
+// nothing is derived from the data sheet alone.  OMCR goes first because the
+// firmware never writes it, so what a booted machine reads is the reset value.
+bool CheckRegisterReadback(EurekaMachine& machine) {
+  bool ok = true;
+  const auto expect = [&](const char* what, uint16_t port, uint8_t want) {
+    const uint8_t got = machine.debug_in(port);
+    if (got == want) return;
+    std::cout << "  " << what << ": precitane " << std::hex
+              << static_cast<unsigned>(got) << "h namiesto "
+              << static_cast<unsigned>(want) << "h" << std::dec << "\n";
+    ok = false;
+  };
+  expect("OMCR po zapnuti", hw::kOmcr, 0xff);
+  machine.debug_out(hw::kOmcr, 0x01);
+  expect("OMCR po OUT 62,1", hw::kOmcr, 0x5f);
+  machine.debug_out(hw::kOmcr, hw::kOmcrReset);
+  expect("OMCR po OUT 62,255", hw::kOmcr, 0xff);
+
+  // 00h is what the firmware writes to both at 00018 and 0001C.
+  machine.debug_out(hw::kRcr, 0x00);
+  expect("RCR po OUT 54,0", hw::kRcr, 0x3c);
+  machine.debug_out(hw::kRcr, hw::kRcrReset);
+  expect("RCR po OUT 54,252", hw::kRcr, 0xfc);
+  machine.debug_out(hw::kRcr, 0x00);
+  machine.debug_out(hw::kIcr, 0x00);
+  expect("ICR po OUT 63,0", hw::kIcr, 0x1f);
+  return ok;
+}
+
 bool CheckDacDecodesWholeBlock(EurekaMachine& machine) {
   bool ok = true;
   uint8_t level = 0x80;
@@ -3568,6 +3599,7 @@ int wmain(int argc, wchar_t** argv) {
     const bool settles = CheckSettlesToSilence(*machine);
     const bool aliases = CheckDacDecodesWholeBlock(*machine);
     const bool internal = CheckInternalRegistersNeedZeroHighByte(*machine);
+    const bool readback = CheckRegisterReadback(*machine);
     const bool highByte = CheckZ180IoAddressHighByte();
     const bool blockFlags = CheckBlockIoFlags();
     const bool waits = CheckMemoryWaitStates(*machine);
@@ -3577,13 +3609,14 @@ int wmain(int argc, wchar_t** argv) {
     const bool line = CheckPhoneLine(*machine);
     const bool extra = CheckExtraRam(*machine);
     const bool drive = CheckDriveTiming(*machine);
-    const bool passed = settles && aliases && internal && highByte &&
-                        blockFlags && waits && refresh && sampling && mirror &&
-                        line && extra && drive;
+    const bool passed = settles && aliases && internal && readback &&
+                        highByte && blockFlags && waits && refresh &&
+                        sampling && mirror && line && extra && drive;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=DC"
               << " ticho=" << (settles ? "ok" : "chyba")
               << " porty=" << (aliases ? "ok" : "chyba")
               << " interne=" << (internal ? "ok" : "chyba")
+              << " citanie=" << (readback ? "ok" : "chyba")
               << " hornybajt=" << (highByte ? "ok" : "chyba")
               << " priznaky=" << (blockFlags ? "ok" : "chyba")
               << " cakacie=" << (waits ? "ok" : "chyba")

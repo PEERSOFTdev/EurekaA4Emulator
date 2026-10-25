@@ -228,6 +228,7 @@ void EurekaMachine::PowerOn() {
   io_[hw::kTcr] = 0;
   io_[hw::kRldr0l] = io_[hw::kRldr0h] = io_[hw::kRldr1l] = io_[hw::kRldr1h] = 0xff;
   io_[hw::kRcr] = hw::kRcrReset;
+  io_[hw::kOmcr] = hw::kOmcrReset;
   refreshTimer_ = 0;
   z80_init(&cpu_);
   cpu_.z180_traps = true;
@@ -925,6 +926,12 @@ uint8_t EurekaMachine::ReadPortInner(z80* cpu, uint16_t port) {
     case hw::kFrc:
       return static_cast<uint8_t>((machine->cycles_ / hw::kTimerPrescale) & 0xff);
     case hw::kDstat: return machine->io_[hw::kDstat];
+    case hw::kRcr:
+      return static_cast<uint8_t>(machine->io_[hw::kRcr] | hw::kRcrReadOnes);
+    case hw::kOmcr:
+      return static_cast<uint8_t>(machine->io_[hw::kOmcr] | hw::kOmcrReadOnes);
+    case hw::kIcr:
+      return static_cast<uint8_t>(machine->io_[hw::kIcr] | hw::kIcrReadOnes);
     case hw::kCbr: return machine->cbr_;
     case hw::kBbr: return machine->bbr_;
     case hw::kCbar: return machine->cbar_;
