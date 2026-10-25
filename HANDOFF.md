@@ -5184,6 +5184,89 @@ Hlásené chyby z balíka sú v beadoch: štvoršípkový vypínací akord na Ji
 Windows (`ea4-46b`), oneskorenie braillu (`ea4-sk1`), hlásenie Defendera na
 staršej zostave (`ea4-jsz`).
 
+### 6.61 Škobrtanie zvuku: najprv merať, potom hĺbka fronty
+
+Jiřího patch 0001 mení cieľ zvukovej fronty `kTargetLatencyMs` z 22 na
+65 ms; podložené je to len tým, že používateľ a hudobník na svojom PC pri
+počúvaní hudby počuli neplynulosť a pri 65 ms nie. Merania z ich PC v balíku
+nie sú. Cena je istá: o 43 ms neskôr všetko, čo je počuť — ozvena klávesu,
+začiatok reči, odpoveď na F10 — a to práve pri hlásení o pomalej odozve
+braillovskej klávesnice (`ea4-sk1`), ktoré prišlo z tej istej zostavy
+s 65 ms. Majiteľ počuje pri hudbe opakovane krátke prasknutie aj u seba,
+hudba sa nezasekne.
+
+Na stroji majiteľa v 6.38 fronta nevyschla (najnižšie 16,4 ms, nič
+zahodené), praskanie vtedy robil model DAC. Odvtedy sa to nemeralo.
+
+**Čo sa pridalo na meranie.** Premenná `EA4_ZVUK_MS` (10 – 100) zmení cieľ
+na jedno spustenie, takže tá istá zostava sa dá porovnať pri 22 aj 65 ms.
+Výpis diagnostiky (`F11`, `Ctrl+D`) má zvukový súhrn a pod ním sekundy,
+v ktorých sa niečo stalo (`PrintAudioTimeline`); vlákno si každú sekundu
+uloží `AudioPlayer::TakeStats` a dĺžku najdlhšieho priechodu, najviac
+desať minút. Medzera sa meria dvakrát nezávisle: hĺbka fronty **v
+zariadení** pod 1 ms (`DeviceQueuedMs`), a o koľko menej zariadenie
+prehralo, než ubehlo času na hodinách počítača (minimum za sekundu, aby
+hrubé kroky pozície nevyzerali ako medzery; medián cez sekundy sa odpočíta
+ako posun hodín karty). Prázdny priechod — vypnutý stroj — sa za medzeru
+nepočíta. Bez výpisu to stojí pár porovnaní na priechod.
+
+**Prvé kolo merania a čo z neho zostalo (25. 10. 2026).** Majiteľ hral
+`BACH.MEL` pri 22 a 65 ms a dával výpis vždy, keď počul prasknutie; pri
+22 ms ho počul často, pri 65 ms nikdy. Vtedy ešte bol riadok len jeden,
+za čas od posledného výpisu, a dve chyby merania sa ukázali až na dátach:
+
+- **Výpis sám zvuk kazí.** Každý vypíše okolo 590 riadkov diagnostiky na
+  vlákne emulátora a to stojí asi 320 ms. Potom stroj dobehne dlh naraz
+  (strop 250 ms), fronta pretečie nad 120 ms a zahodí sa 51 blokov —
+  presne toľko mal každý ďalší riadok. Preto po stlačení `F11`, `Ctrl+D`
+  počas hudby škobrtalo niekoľko sekúnd. Odtiaľ časová os a výpis raz na
+  konci.
+- **„Vyschla“ medzeru neukázal**, ani po 320 ms státí. Do hĺbky sa
+  počítal aj `staging_`, rozpracovaný blok, ktorý zariadenie ešte nemá —
+  vyhladované zariadenie sa tak tvárilo, že má 1 – 5 ms. Odtiaľ
+  `DeviceQueuedMs`.
+
+Čo sa z prvého kola dá čítať aj tak: pri 22 ms klesala fronta (aj s
+`staging_`) na 0,2 – 5,5 ms, pri 65 ms najnižšie na 19,9 ms aj s 45 ms
+státím od výpisu.
+
+**Druhé a tretie kolo, s časovou osou (25. 10. 2026).** `BACH.MEL` celá,
+výpis raz po naběhnutí a raz na konci; prvé dve sekundy za výpisom sú jeho
+dozvuk a nerátajú sa. Majiteľov sluch v zátvorke.
+
+- 22 ms, 125 s: medzera v 53 sekundách, priemerne raz za 2,4 s, zvyčajne
+  1 – 9 ms, miestami dve-tri sekundy za sebou (počul každé dve sekundy,
+  chvíľami každú pol sekundu).
+- 30 ms, 77 s: dve medzery po 2,5 ms (počul jedno-dve zaškobrtnutia).
+- 40 ms, 79 s: žiadna (počul asi štyri — kratšie než 1 ms, ktoré detektor
+  neukáže, alebo prechody v samotnej hudbe; nerozhodnuté).
+- 50 ms, 76 s, a 65 ms, 77 s: žiadna (nepočul nič).
+
+Pri všetkých hĺbkach slučka stíhala (najdlhší priechod do 5,5 ms), nič sa
+nezahodilo a fronta **vo waveOut** neklesla pod 12 ms ani pri 22 ms —
+„vyschla“ zostal na nule. Medzery teda nevznikajú v emulátore ani vo
+fronte, ktorú vidí, ale až za waveOut: waveOut je na Windows 10 obal nad
+WASAPI s vlastnou medzivrstvou, pozíciu hlási hrubo a zvukový systém z nej
+kŕmi po svojich kusoch, takže 12 ms vo waveOut nestačí. Koľko stačí, závisí
+od ovládača — u majiteľa medzi 30 a 50 ms. Niekoľko „medzier“ okolo 30 ms
+pri náraste fronty (22 ms, sekundy 58 a 88) sú začiatky a konce skladby,
+nie vyhladovanie. Detektor sa s majiteľovým sluchom zhodol pri 22, 30, 50
+aj 65 ms. Výpisy sa neuchovávajú; čísla, na ktorých záleží, sú tu.
+
+**Záver.** Hlbšia fronta problém naozaj rieši, takže príčina je potvrdená,
+ale 65 ms je len hodnota, o ktorej vieme, že stačí, a každá milisekunda
+navyše je oneskorenie ozveny, reči aj klávesnice. Prispôsobivý cieľ nad
+waveOut by bol heuristikou nad nepresným meraním. Ďalší krok, rozhodnutie
+majiteľa: nahradiť waveOut zdieľaným WASAPI v `AudioPlayer` s tým istým
+rozhraním — `GetCurrentPadding` hovorí presne, koľko leží priamo vo
+vyrovnávacej pamäti zvukového systému — a odmerať tou istou diagnostikou
+pri 22 a 30 ms. Jiřího patch 0001 sa uzavrie podľa toho.
+
+**Čo sa malo odmerať.** Či počuteľné prasknutie sprevádza vyschnutá fronta
+alebo dlhý priechod; ak nie, príčina je inde (ovládač, mixér Windows,
+model) a hĺbka fronty ju nevyrieši. Odpoveď nižšie: ani jedno z toho, ale
+medzera za waveOut, ktorú hĺbka fronty rieši.
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
