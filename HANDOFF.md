@@ -1084,6 +1084,10 @@ Dve veci odtiaľ, ktoré platia ďalej a inde sa nedozvedia:
   inštrukcií ju nehýbe: pri zásahu, ktorý stlačil tempo hudby o 3,9 %,
   sa dĺžka štartovej hlášky zmenila o 0,03 %. Kto siahne na cykly,
   meria oboje zvlášť.
+- **Odkiaľ je ten jeden T-stav na M1, už vieme aspoň po funkcii
+  (25. 10. 2026, 6.59):** doska ho pridáva na `/M1` a bit M1E v `OMCR`
+  ho vypína — `OUT 62,1` je presne to. Pri predvolenom stave sa nezmenilo
+  nič, tempo znelky zostalo 97 850 / 37 343.
 
 ### 6.11 Funkčné klávesy hladujú: emulátor odreže ROM od jej vlastnej fronty
 
@@ -3247,6 +3251,12 @@ znelky, `seq 20000000 kC6 spin:2000000`: so zavedeným účtovaním
 účtovaním **97 850 na 37 343** — do posledného obehu to isté. Firmvér drží
 MWI na nule, takže sa pripočítava nula.
 
+**Toto už celkom neplatí (25. 10. 2026, 6.59).** Na cykle M1 sa MWI so
+čakaním dosky neskladá, ale prekrýva: načítanie operačného kódu čaká
+max(doska, MWI), nie súčet. Skutočná Eureka to vyvrátila o 18 % (6.59).
+Test nižšie sa preto prepísal a „3, 6 a 6“ už nedrží — pri MWI = 3 je to
+2, 5 a 5 nad predvoleným stavom.
+
 Drží to `CheckMemoryWaitStates` v režime `dc`: `NOP`, `LD A,(HL)` a
 `LD (HL),A` v RAM, každá raz s MWI = 0 a raz s MWI = 3, a rozdiel musí byť
 tri T-stavy **na pamäťový prístup** — teda 3, 6 a 6. Tri rôzne počty prístupov
@@ -3366,6 +3376,10 @@ Veta „tá šestka zrýchľuje“ nie je jasná — treba sa spýtať.
 **Polovica rozhodnutá (25. 10. 2026, 6.58):** register na `3Eh` skutočná
 Eureka má — po `OUT 62,1` číta `5Fh`, po zapnutí `FFh` — a emulátor ho odvtedy
 drží aj číta. Či a ako mení rýchlosť, je otvorené ďalej v 6.58.
+
+**Rozhodnuté celé (25. 10. 2026, 6.59):** šestka zrýchľuje — `OUT 62,1`
+zhodí M1E a s ním čakací stav dosky na každom načítaní operačného kódu.
+Skutočná Eureka: slučka EUTEST10 4,48 s namiesto 5,52 s.
 
 ### 6.46 CHESS.COM — rýchlosť emulátora proti spomienke na skutočný stroj
 
@@ -5018,6 +5032,78 @@ zapnutí“.
 **Otvorené:** čo `OMCR` robí s časovaním. Ten istý balík tvrdí, že
 `OUT 62,1` stroj zrýchli (vypne čakací stav na M1), a dokladá to časmi
 z EUTEST10/13. To je samostatná zmena modelu jadra a posudzuje sa zvlášť.
+
+**Uzavreté v 6.59.**
+
+### 6.59 Čakanie na M1: OMCR ho vypína a s MWI sa prekrýva
+
+**Odkiaľ to je.** Ten istý balík Jiřího Zadražila ako 6.58: výpisy
+EUTEST10 a EUTEST13 zo skutočnej Eureky, ktoré merajú tri slučky po
+1 048 576 obehoch hodinami stroja. Jeho úprava jadra sa nepreberala
+doslova; model je ten istý, kód a test sú prepísané po našom.
+
+**Slučky** (generátor `build_eutest13.py` v balíku):
+
+- CPU: `NOP`, `NOP`, `DEC BC`, `LD A,B`, `OR C`, `JR NZ` — šesť M1 a jedno
+  čítanie posunu, 26 T podľa tabuliek Z180, s čakaním dosky 32 T.
+- READ: dva `NOP` vymenené za `LD A,(HL)` — 32 T, s doskou 38 T.
+- WRITE: za `LD (HL),A` — 34 T, s doskou 40 T.
+
+Na stroji 32,3 T pri 5,52 s pre CPU, rozdiel sú prerušenia. Ten istý
+pomer stačí na predpoveď každého ďalšieho merania z hlavy, bez emulátora.
+
+**Čo stroj nameral proti dvom modelom** (súčet je to, čo emulátor robil
+od 6.43, maximum je to, čo robí teraz):
+
+- `OUT 62,1`, MWI 0 (EUTEST10): CPU 4,48 s, READ 5,52 s, WRITE 5,86 s.
+  Maximum dáva 26/32/34 T, teda 4,49, 5,52 a 5,87 s. Súčet ani starý
+  model OMCR nepoznali, dávali 5,52, 6,56 a 6,90 s.
+- DCNTL 60h (MWI 1), M1E zapnutý (EUTEST13 P01): CPU 5,70 s, READ 7,08 s.
+  Maximum 33 a 41 T, teda 5,69 a 7,07 s. Súčet 39 a 47 T, teda 6,73
+  a 8,11 s.
+- DCNTL 60h a k tomu `OUT 62,1` (P03): CPU 5,71 s — rovnako ako bez OMCR,
+  lebo max(0, 1) = max(1, 1). Súčet by tu rozlíšiť nevedel, maximum to
+  predpovedá.
+- DCNTL AAh (MWI 2, P05): CPU 6,93 s, maximum 40 T, teda 6,90 s; súčet
+  46 T, teda 7,94 s.
+
+Dvanásť čísel zo stroja sedí na najviac 0,03 s, súčet minie o 18 %.
+
+**Prečo by to tak mohlo byť** — je to výklad, nie meranie: M1E rozhoduje,
+či procesor pri načítaní kódu vôbec vysiela `/M1`. Generátor čakacieho
+stavu na doske spúšťaný `/M1` je v návrhoch so Z80 bežný, a keď `/M1` nepríde,
+nečaká sa. Prekrytie s MWI zodpovedá tomu, že vnútorné aj vonkajšie čakanie
+predlžuje ten istý cyklus a vyhráva dlhšie (UM005004, kapitola o čakacích
+stavoch). Schému dosky nemáme.
+
+**Čo sa zmenilo.** `m1_wait` v `z80.c` už nie je konštanta, ale pole
+jadra `z->m1_wait`; `z80_init` ho nastaví na 1, takže samotné jadro
+(`zex_test`) sa správa ako predtým. `EurekaMachine::UpdateM1Wait` doň
+zapíše max(doska, MWI) − MWI — MWI pri načítaní kódu účtuje `rb()` už samo
+— a volá sa po `z80_init` a pri každom zápise do `OMCR` aj `DCNTL`.
+Doska je `hw::kBoardM1Wait`, bit `hw::kOmcrM1e`. Snímka RAM stav CPU
+neukladá, takže `pamat.bin` sa to netýka.
+
+**Pri predvolenom stave sa nezmenilo nič**: M1E zapnutý a MWI 0 dávajú
+1 T na M1 ako doteraz. Tempo znelky (`seq 20000000 kC6 spin:2000000`)
+97 850 na 37 343, do obehu to isté ako v 6.43. `zex_test` `errors=0`.
+
+**Čo pocíti používateľ.** Iba program, ktorý sám zapíše do `OMCR` alebo
+nastaví MWI: `OUT 62,1` zrýchli stroj asi o pätinu, `OUT 50,96` a
+`OUT 50,170` spomalia menej než doteraz.
+
+Drží to `CheckMemoryWaitStates` v režime `dc`, prepísaný: šesť inštrukcií
+(aj s prefixmi `ED`, `CB` a `DD`, každý je samostatné M1 účtované na inom
+mieste jadra) v štyroch nastaveniach M1E a MWI, každé proti prechodu
+s oboma vypnutými. Zapisuje len register, ktorý sa medzi prechodmi mení,
+inak by zápis jedného prekryl chýbajúci prepočet pri druhom — presne tak
+prvá verzia testu prepustila mutáciu. Overené piatimi mutáciami: súčet
+namiesto maxima, ignorovaný M1E, prefix `ED` s pevnou jednotkou, chýbajúci
+prepočet po `OMCR` a chýbajúci prepočet po `DCNTL` — každá test zhodí.
+
+**Čo zostáva neisté:** M1TE a IOC sa nemodelujú (nikto ich neočakáva) a
+nerozlišuje sa, či `/M1` pri potvrdení prerušenia čaká inak. Rozšírená RAM
+na 40000h sa v tých meraniach nepoužila.
 
 ## 7. Nástroje
 

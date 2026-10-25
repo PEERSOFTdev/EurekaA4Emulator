@@ -22,6 +22,12 @@ struct z80 {
   // the host sets it, which is what the Eureka's firmware leaves it at.
   uint8_t mem_wait;
 
+  // Wait states added to every M1 cycle on top of mem_wait: what the board
+  // puts there and DCNTL does not already cover.  z80_init sets 1, the
+  // Eureka's board wait with M1E on and MWI at 0; the machine recomputes it
+  // whenever OMCR or DCNTL changes (HANDOFF 6.59).
+  uint8_t m1_wait;
+
   uint16_t pc, sp, ix, iy; // special purpose registers
   uint16_t mem_ptr; // "wz" register
   uint8_t a, b, c, d, e, h, l; // main registers

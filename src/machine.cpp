@@ -231,12 +231,25 @@ void EurekaMachine::PowerOn() {
   io_[hw::kOmcr] = hw::kOmcrReset;
   refreshTimer_ = 0;
   z80_init(&cpu_);
+  UpdateM1Wait();
   cpu_.z180_traps = true;
   cpu_.read_byte = ReadMemory;
   cpu_.write_byte = WriteMemory;
   cpu_.port_in = CpuReadPort;
   cpu_.port_out = CpuWritePort;
   cpu_.userdata = this;
+}
+
+// The board's wait on /M1 and DCNTL's MWI overlap instead of adding up:
+// EUTEST13 on the real Eureka runs its delay loop at DCNTL=60h in 5,70 s, the
+// 33 T-states of max(1, 1) per fetch, not the 6,73 s that 1 + 1 would take
+// (HANDOFF 6.59).  rb() already charges MWI on the fetch, so the core is given
+// only what the board adds beyond it.
+void EurekaMachine::UpdateM1Wait() {
+  const unsigned board =
+      (io_[hw::kOmcr] & hw::kOmcrM1e) != 0 ? hw::kBoardM1Wait : 0;
+  cpu_.m1_wait =
+      static_cast<uint8_t>(board > cpu_.mem_wait ? board - cpu_.mem_wait : 0);
 }
 
 bool EurekaMachine::WakeOnAlarm() {
@@ -1052,7 +1065,9 @@ void EurekaMachine::WritePort(z80* cpu, uint16_t port, uint8_t value) {
     case hw::kDcntl:
       cpu->mem_wait =
           static_cast<uint8_t>((value & hw::kDcntlMwi) >> hw::kDcntlMwiShift);
+      machine->UpdateM1Wait();
       break;
+    case hw::kOmcr: machine->UpdateM1Wait(); break;
     case hw::kTmdr1l: machine->WriteTimerData(1, false, value); break;
     case hw::kTmdr1h: machine->WriteTimerData(1, true, value); break;
     case hw::kDstat: {

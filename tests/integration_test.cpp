@@ -1281,52 +1281,88 @@ bool CheckZ180IoAddressHighByte() {
 // is always 0 -- but the built-in BASIC can change it, and `OUT 50,240` is
 // exactly that write (HANDOFF 6.39, 6.43).
 //
-// Charged per memory **access**, not per instruction, which is why the three
-// cases below differ: NOP fetches and nothing more, while LD A,(HL) and
-// LD (HL),A each touch memory twice.  An implementation that added the
-// penalty once per instruction would pass the first case and fail the others.
+// Charged per memory **access**, not per instruction, which is why the cases
+// below differ: NOP fetches and nothing more, while LD A,(HL) and LD (HL),A
+// each touch memory twice.  An implementation that added the penalty once per
+// instruction would pass the first case and fail the others.
+//
+// The opcode fetch has a second source, the board's wait on /M1, which OMCR's
+// M1E switches off and which overlaps MWI instead of adding to it (HANDOFF
+// 6.59): a fetch waits max(board, MWI), any other access MWI.  Each case is
+// measured against a pass with both off.  DCNTL=60h with M1E on is the case
+// the real Eureka timed; adding the two would cost one more T per fetch there.
+// The prefixed instructions are there because each prefix is an M1 of its
+// own, charged at a separate place in the core.
 bool CheckMemoryWaitStates(EurekaMachine& machine) {
   constexpr uint16_t kScratch = 0x8000;
   struct Case {
     const char* name;
-    uint8_t opcode;
-    unsigned accesses;
+    std::vector<uint8_t> code;
+    unsigned fetches;
+    unsigned others;
   };
   const std::vector<Case> cases = {
-      {"nop", 0x00, 1},
-      {"ld a,(hl)", 0x7e, 2},
-      {"ld (hl),a", 0x77, 2},
+      {"nop", {0x00}, 1, 0},
+      {"ld a,(hl)", {0x7e}, 1, 1},
+      {"ld (hl),a", {0x77}, 1, 1},
+      {"neg", {0xed, 0x44}, 2, 0},
+      {"rlc a", {0xcb, 0x07}, 2, 0},
+      // The displacement is a memory read but not an M1.
+      {"ld a,(ix+0)", {0xdd, 0x7e, 0x00}, 2, 2},
   };
+  struct Setting {
+    bool m1e;
+    unsigned mwi;
+  };
+  const std::vector<Setting> settings = {
+      {true, 0}, {true, 1}, {true, 3}, {false, 3}};
   bool ok = true;
   const uint8_t settled = machine.debug_in(hw::kDcntl);
+  // Only a register whose value changes is written, so that going from the
+  // bare pass to M1E alone has nothing but the OMCR write to recompute the
+  // wait, and going to MWI alone nothing but the DCNTL write.  Writing both
+  // every time would let either one cover for the other's missing update.
+  int lastM1e = -1;
+  int lastMwi = -1;
+  const auto run = [&](const Case& item, bool m1e, unsigned mwi) {
+    if (lastM1e != static_cast<int>(m1e))
+      machine.debug_out(hw::kOmcr, m1e ? hw::kOmcrReset : 0x00);
+    if (lastMwi != static_cast<int>(mwi))
+      machine.debug_out(
+          hw::kDcntl,
+          static_cast<uint8_t>((settled & ~hw::kDcntlMwi) |
+                               (mwi << hw::kDcntlMwiShift)));
+    lastM1e = m1e;
+    lastMwi = static_cast<int>(mwi);
+    for (std::size_t i = 0; i < item.code.size(); ++i)
+      machine.debug_poke(static_cast<uint16_t>(kScratch + i), item.code[i]);
+    machine.debug_set_pc(kScratch);
+    // HL into scratch RAM as well, so the memory operand is somewhere
+    // harmless rather than wherever HL happened to point.
+    machine.debug_set_hl(kScratch + 0x10);
+    const uint64_t before = machine.cycles();
+    machine.Step();
+    return machine.cycles() - before;
+  };
 
   for (const auto& item : cases) {
-    unsigned long long cost[2] = {0, 0};
-    for (int pass = 0; pass < 2; ++pass) {
-      // Pass 0 leaves MWI at 0, pass 1 sets it to 3 -- the F0h that BASIC
-      // writes, with IWI left where the firmware had it.
-      const uint8_t mwi = pass == 0 ? 0x00 : hw::kDcntlMwi;
-      machine.debug_out(hw::kDcntl,
-                        static_cast<uint8_t>((settled & ~hw::kDcntlMwi) | mwi));
-      machine.debug_poke(kScratch, item.opcode);
-      machine.debug_set_pc(kScratch);
-      // HL into scratch RAM as well, so the memory operand is somewhere
-      // harmless rather than wherever HL happened to point.
-      machine.debug_set_hl(kScratch + 1);
-      const uint64_t before = machine.cycles();
-      machine.Step();
-      cost[pass] = machine.cycles() - before;
-    }
-    const unsigned long long added = cost[1] - cost[0];
-    const unsigned long long want = 3ull * item.accesses;
-    if (added != want) {
-      std::cout << "  " << item.name << ": MWI=3 pridalo " << added
-                << " T namiesto " << want << " (" << cost[0] << " -> "
-                << cost[1] << ")\n";
-      ok = false;
+    const uint64_t bare = run(item, false, 0);
+    for (const auto& setting : settings) {
+      const unsigned board = setting.m1e ? 1 : 0;
+      const uint64_t want =
+          item.fetches * std::max(board, setting.mwi) +
+          item.others * setting.mwi;
+      const uint64_t added = run(item, setting.m1e, setting.mwi) - bare;
+      if (added != want) {
+        std::cout << "  " << item.name << ": M1E=" << board
+                  << " MWI=" << setting.mwi << " pridalo " << added
+                  << " T namiesto " << want << "\n";
+        ok = false;
+      }
     }
   }
 
+  machine.debug_out(hw::kOmcr, hw::kOmcrReset);
   machine.debug_out(hw::kDcntl, settled);
   return ok;
 }

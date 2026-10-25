@@ -442,6 +442,9 @@ class EurekaMachine {
 
  private:
   void PowerDown();
+  // Sets cpu_.m1_wait to what the board's M1 wait adds on top of MWI, from
+  // OMCR and DCNTL.  Called after z80_init and on every write to either.
+  void UpdateM1Wait();
 
   static uint8_t ReadMemory(void* context, uint16_t logical);
   static void WriteMemory(void* context, uint16_t logical, uint8_t value);

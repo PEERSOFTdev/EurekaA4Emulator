@@ -244,6 +244,16 @@ constexpr uint8_t kOmcr = 0x3e;
 constexpr uint8_t kOmcrReset = 0xff;
 constexpr uint8_t kOmcrReadOnes = 0x5f;
 
+// M1E: while it is set, every opcode fetch carries the one extra wait state
+// z80.c has always charged (HANDOFF 6.10); clear it and the wait is gone.
+// `OUT 62,1` makes the delay loop of EUTEST10 26 T-states instead of 32,
+// measured on the real Eureka as 4,48 s against 5,52 s (HANDOFF 6.59).  That
+// the board keys it on /M1, which M1E gates, is our reading, not a schematic.
+// The wait overlaps DCNTL's MWI rather than adding to it, so a fetch waits
+// max(board, MWI).
+constexpr uint8_t kOmcrM1e = 0x80;
+constexpr unsigned kBoardM1Wait = 1;
+
 // HD64180Z manual, ITC: TRAP is set by an undefined op code and software can
 // only write it to 0; UFO says whether the third op code byte was the
 // undefined one and is read-only.  WBOOT at E6B3h (196B3) tests TRAP.
