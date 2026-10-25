@@ -62,6 +62,10 @@ class PreciseTimer {
 // buffering becomes the floor, the controller pushes against it and
 // overshoots instead, and the spread measured 10-48 ms.  Measured here at 22:
 // 24 ms average while speaking, never closer than 16 ms to running dry.
+// That was through waveOut, whose own layer still starved the engine at 22
+// on the owner's machine -- a gap every 2.4 s in music, none from 50.  Through
+// WASAPI the queue is the engine's buffer itself, and 22 got through 265 s of
+// reading text and the whole piece without one (HANDOFF 6.61).
 constexpr double kDefaultLatencyMs = 22.0;
 
 // EA4_ZVUK_MS overrides the target for one run, so that the same build can be
@@ -844,7 +848,7 @@ void EmulatorThread::Run() {
   // Told to the window rather than printed: there is no console unless the
   // user asked for one, and this is the least losable message the emulator
   // has -- without sound this machine has no user interface at all.
-  if (!audio.Open(EurekaMachine::kAudioHz) && notify)
+  if (!audio.Open(EurekaMachine::kAudioHz, targetLatencyMs) && notify)
     PostMessageW(notify, WM_EMU_NO_AUDIO, 0, 0);
 
   using Clock = std::chrono::steady_clock;
@@ -1177,7 +1181,7 @@ void EmulatorThread::Run() {
         host.heldKeys.fill(false);
         host.mods = 0;
         audio.Close();
-        audio.Open(EurekaMachine::kAudioHz);
+        audio.Open(EurekaMachine::kAudioHz, targetLatencyMs);
         lastTick = Clock::now();
         guestClock = 0.0L;
         host::Print(L"\r\n[Eureka bola resetovaná]\r\n");
@@ -1276,7 +1280,7 @@ void EmulatorThread::Run() {
         // go on talking over the boot tones.
         if (wasRunning) {
           audio.Close();
-          audio.Open(EurekaMachine::kAudioHz);
+          audio.Open(EurekaMachine::kAudioHz, targetLatencyMs);
           lastTick = Clock::now();
         }
         // The user's writing mode is theirs and survives; a key caught
@@ -1516,7 +1520,7 @@ void EmulatorThread::Run() {
     // The machine switched itself off: the four cursor keys from the Main
     // Menu, or five minutes of nobody touching it.  It says "konec" first, and
     // that announcement is still inside the sound device when the strobe fires
-    // -- AudioPlayer::Close() calls waveOutReset and would throw it away -- so
+    // -- AudioPlayer::Close() stops the stream and would throw it away -- so
     // wait for it to play out.  Two seconds is a ceiling for a device that
     // stops reporting progress, not a pause.
     //

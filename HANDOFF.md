@@ -695,6 +695,8 @@ majú vlastné napájanie, ktoré sa nikdy neodpájalo (`GLOSSARY.TXT`), a
 práve preto vie firmvér nadviazať tam, kde používateľ skončil. `main.cpp`
 počká, kým dohrá „konec" (`AudioPlayer::Close()` volá `waveOutReset` a
 inak by koncovku odrezal), zapíše disk a skončí.
+*Od 29. 10. 2026 (6.61):* `Close()` zastaví prúd WASAPI, nie waveOut;
+koncovku by odrezal rovnako, takže čakanie platí ďalej.
 
 **Posledná veta už neplatí (9. 9. 2026).** Emulátor po vypnutí
 neskončí: okno zostáva otvorené, vlákno stroja beží ďalej a späť ho
@@ -788,6 +790,10 @@ patrí rekonštrukčný filter aj väzobný kondenzátor a v kóde ich drží
 sa cez `waveOutGetPosition`, nie cez účtovníctvo blokov. Otvorené z tejto
 témy zostáva len toto:
 
+*Od 29. 10. 2026 (6.61) ide zvuk cez zdieľané WASAPI* a hĺbka sa číta
+z `GetCurrentPadding`, teda priamo z vyrovnávacej pamäte zvukového
+systému. Cieľ zostal 22 ms; waveOut pri ňom u majiteľa nechával medzery.
+
 #### Čo zostáva
 
 - ~~**WAV-y v `audio/`** sú stále v štyroch hádaných frekvenciách;
@@ -804,6 +810,9 @@ témy zostáva len toto:
   cesta je WASAPI v zdieľanom režime riadený udalosťou, prípadne
   `IAudioClient3`. Je to podstatne väčší zásah a dnešných 23 ms ho
   nezdôvodňuje.
+  *WASAPI je od 29. 10. 2026 (6.61) zavedené, ale z iného dôvodu* —
+  medzery pri 22 ms, nie nižšia latencia — a bez udalostí: slučka píše,
+  koľko sa zmestí, pri každom priechode. Pod 22 ms sa to neskúšalo.
 
 ### 6.2 Zahodené zápisy na 1C1FA–1C1FC
 
@@ -5261,6 +5270,35 @@ majiteľa: nahradiť waveOut zdieľaným WASAPI v `AudioPlayer` s tým istým
 rozhraním — `GetCurrentPadding` hovorí presne, koľko leží priamo vo
 vyrovnávacej pamäti zvukového systému — a odmerať tou istou diagnostikou
 pri 22 a 30 ms. Jiřího patch 0001 sa uzavrie podľa toho.
+
+**WASAPI — vyriešené (25. 10. 2026).** `AudioPlayer` je teraz zdieľané
+WASAPI na predvolenom zariadení s tým istým rozhraním; slučka, riadenie
+tempa aj diagnostika sa nezmenili. Každý priechod zapíše, koľko sa zmestí;
+hĺbku hovorí `GetCurrentPadding`, pozíciu pre detektor medzier
+`IAudioClock`. Formát prevedie sám zvukový systém
+(`AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM`, v hlavičkách MinGW chýba a je
+dodefinovaný), takže stroj ďalej dáva mono 16 bitov 48 kHz. Zmenu
+predvoleného zariadenia waveOut sledoval sám, tu sa pýta raz za sekundu, a
+stratené zariadenie sa otvorí znova. Každý nový prúd — pri štarte, resete
+aj zmene zariadenia — dostane hneď cieľovú hĺbku ticha (`prefillMs`); inak
+by ho dva percentá riadenia tempa plnili asi sekundu a zvukový systém by
+celý ten čas hladoval. Na tichom teste prvá sekunda bez vyschnutia, predtým
+tri. `-lwinmm` z linkovania vypadlo, nič iné ho nepoužívalo.
+
+Overené dvakrát. Tichý test na stroji majiteľa (nuly, takže nič nepočuť;
+skript mimo repozitára): pri cieli 22 ms ustálená fronta najnižšie 15,8 ms,
+bez medzier, a úmyselné 50 ms státie detektor ukázal ako jedno vyschnutie
+a 30 ms medzery. Potom majiteľ, 22 ms, 265 s čítania textu a celá
+`BACH.MEL`: **žiadna medzera** okrem dvoch sekúnd dozvuku výpisu na
+začiatku, a nepočul žiadne prasknutie. Pri tom istom cieli dával waveOut
+medzeru priemerne raz za 2,4 s.
+
+Výchozí cieľ preto zostáva **22 ms** a oneskorenie sa nemení. Jiřího patch
+0001 (65 ms) sa neprevezme: odstraňoval ten istý príznak za cenu 43 ms
+oneskorenia všetkého, čo je počuť. Že to bolo práve vo waveOut, ukázala až
+diagnostika, ktorú si jeho zmena vynútila. `EA4_ZVUK_MS` a časová os
+zostávajú — na overenie u Jiřího používateľa a na každý ďalší stroj, kde by
+zvuk škobrtal.
 
 **Čo sa malo odmerať.** Či počuteľné prasknutie sprevádza vyschnutá fronta
 alebo dlhý priechod; ak nie, príčina je inde (ovládač, mixér Windows,

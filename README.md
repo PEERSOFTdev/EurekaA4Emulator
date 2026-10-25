@@ -931,7 +931,7 @@ neprepísal obsah pripojeného obrazu.
 - WD1772 na úrovni sektorov a CP/M BIOS na úrovni 128-bajtových záznamov;
 - RTC, napäťové komparátory, napájacie a výstupné registre;
 - 8-bitový DAC s rekonštrukčným filtrom, pôvodný syntetizátor, hudba
-  a zvuky cez Windows `waveOut`;
+  a zvuky cez zdieľané WASAPI na predvolenom výstupe Windows;
 - sériový port RS-232 (kanál ASCI 1), cez ktorý Eureka tlačí a Komunikácia
   posiela a prijíma súbory: rýchlosť a formát podľa nastavenia v stroji,
   signály RTS a CTS, prerušenie od prijatého znaku;
