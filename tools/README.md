@@ -48,6 +48,41 @@ Overené v emulátore (HANDOFF 6.55): na našej ROM zapíše `A4ROM.DMP` s MD5
 27C256, Advanced English, neznáme rozloženie a nečakanú mapu pamäte
 emulátor nemodeluje; overené sú mutáciou.
 
+## `eutest/` — merania rýchlosti zo skutočnej Eureky
+
+Autor je Jiří Zadražil (balík opráv z 23. 10. 2026, HANDOFF 6.58 až 6.60).
+`EUTEST10.COM` a `EUTEST13.COM` sú programy pre CP/M, ktoré hodinami stroja
+odmerajú tri slučky po 1 048 576 obehoch (výpočet, čítanie a zápis pamäte),
+medzi meraniami menia porty 50, 54 a 62 a všetko zapíšu na disketu do
+`EUTEST10.TXT` a `EUTEST13.TXT`. Na nich stoja modely čakania a obnovovania.
+
+- `build_eutest10.py`, `build_eutest13.py` — generátory. Program poskladajú
+  bajt po bajte, ROM ani assembler nepotrebujú:
+  `python build_eutest13.py --out PRIECINOK`. Sú prevzaté doslova, nie
+  v štýle ostatných nástrojov, aby z nich vychádzal ten istý program, aký
+  bežal na stroji — SHA-256 `3e7d8cd7…` pre EUTEST10 a `14817f66…` pre
+  EUTEST13, overené 25. 10. 2026.
+- `stroj/EUTEST10.TXT`, `stroj/EUTEST13.TXT` — výpisy zo skutočnej Eureky.
+  Súbory CP/M, CRLF v 128-bajtových záznamoch; `.gitattributes` ich chráni
+  pred konverziou koncov riadkov.
+- `compare_measurements.py STROJ.TXT INY.TXT --out VYSLEDOK.json` —
+  porovná dva výpisy EUTEST13 meranie po meraní, v stotinách sekundy.
+
+Časy sú binárne čísla vypísané šestnástkovo, nie BCD: `0D:49` je 13 s
+a 73 stotín. EUTEST13 píše hodiny, minúty, sekundy a stotiny, EUTEST10 len
+sekundy a stotiny.
+
+**Časy z emulátora majú zmysel len v okne.** Hodiny stroja idú podľa
+hodín hostiteľa, a okno beží v skutočnom čase. Sonda beží bez brzdy, takže
+jej časy neznamenajú nič; dobehnutie programu a prečítané registre áno:
+
+```
+diag_probe ROM DISK seq 6000000000 kD6 . EUTEST13~ @TEST_COMPLETE . . ram
+```
+
+`kD6` je Shift+F7, spustenie programu z diskety. `ram` na konci disketu
+zapíše do priečinka a až potom vymení; bez neho výpis v priečinku nebude.
+
 Adresy sú vždy **fyzické** (offset v dumpe), nie logické. Prepočet na
 logické závisí od stavu MMU: pri common area 1 s CBR=0Bh platí
 fyzická = logická + B000h.

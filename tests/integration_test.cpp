@@ -1779,6 +1779,66 @@ bool CheckInterruptSampledAtEndOfInstruction(EurekaMachine& machine) {
   return ok;
 }
 
+// MLT rr, the Z180's 8 x 8 multiply: the high byte of the pair times the low
+// byte, the 16-bit product back into the pair, and no flag touched
+// (UM005004).  ZEXDOC knows only the Z80 and cannot see it, and a wrong
+// product would only ever show as a wrong number far from its cause.  So every
+// operand pair, for all four register pairs: 262 144 cases, a fraction of a
+// second.  The flags start as a pattern taken from the operands, so a core
+// that cleared them or set them would not pass by luck.  Taken over from the
+// test in Jiri Zadrazil's package (HANDOFF 6.60).
+bool CheckMultiply() {
+  static const char* const kPairs[4] = {"bc", "de", "hl", "sp"};
+  for (unsigned pair = 0; pair < 4; ++pair) {
+    for (unsigned operands = 0; operands < 0x10000; ++operands) {
+      BarePorts probe;
+      probe.code[0] = 0xed;
+      probe.code[1] = static_cast<uint8_t>(0x4c + 0x10 * pair);
+      z80 cpu;
+      z80_init(&cpu);
+      cpu.read_byte = BareRead;
+      cpu.write_byte = BareWrite;
+      cpu.port_in = BareIn;
+      cpu.port_out = BareOut;
+      cpu.userdata = &probe;
+      cpu.z180_traps = true;
+      const uint8_t high = static_cast<uint8_t>(operands >> 8);
+      const uint8_t low = static_cast<uint8_t>(operands);
+      cpu.b = cpu.d = cpu.h = high;
+      cpu.c = cpu.e = cpu.l = low;
+      cpu.sp = static_cast<uint16_t>(operands);
+      const uint8_t flags = static_cast<uint8_t>(operands * 0x9d >> 3);
+      const auto pack = [&cpu] {
+        return static_cast<uint8_t>(cpu.sf << 7 | cpu.zf << 6 | cpu.yf << 5 |
+                                    cpu.hf << 4 | cpu.xf << 3 | cpu.pf << 2 |
+                                    cpu.nf << 1 | cpu.cf);
+      };
+      cpu.sf = flags >> 7 & 1;
+      cpu.zf = flags >> 6 & 1;
+      cpu.yf = flags >> 5 & 1;
+      cpu.hf = flags >> 4 & 1;
+      cpu.xf = flags >> 3 & 1;
+      cpu.pf = flags >> 2 & 1;
+      cpu.nf = flags >> 1 & 1;
+      cpu.cf = flags & 1;
+      z80_step(&cpu);
+      const unsigned product = pair == 0   ? (cpu.b << 8 | cpu.c)
+                               : pair == 1 ? (cpu.d << 8 | cpu.e)
+                               : pair == 2 ? (cpu.h << 8 | cpu.l)
+                                           : cpu.sp;
+      if (product != unsigned(high) * low || pack() != flags ||
+          cpu.pc != 2 || cpu.trap) {
+        std::cout << "  mlt " << kPairs[pair] << " " << std::hex
+                  << unsigned(high) << "h*" << unsigned(low) << "h: " << product
+                  << "h, priznaky " << unsigned(pack()) << "h namiesto "
+                  << unsigned(flags) << "h, pc=" << cpu.pc << std::dec << "\n";
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Flags of the block-I/O instructions, from UM005004 Table 46 and its two
 // notes: (5) Z is 1 when B-1 is 0, (6) **N is the top bit of the byte
 // transferred** -- not the constant 1 this core wrote for years.  Hitachi's
@@ -3638,6 +3698,7 @@ int wmain(int argc, wchar_t** argv) {
     const bool readback = CheckRegisterReadback(*machine);
     const bool highByte = CheckZ180IoAddressHighByte();
     const bool blockFlags = CheckBlockIoFlags();
+    const bool multiply = CheckMultiply();
     const bool waits = CheckMemoryWaitStates(*machine);
     const bool refresh = CheckRefreshCycles(*machine);
     const bool sampling = CheckInterruptSampledAtEndOfInstruction(*machine);
@@ -3646,8 +3707,9 @@ int wmain(int argc, wchar_t** argv) {
     const bool extra = CheckExtraRam(*machine);
     const bool drive = CheckDriveTiming(*machine);
     const bool passed = settles && aliases && internal && readback &&
-                        highByte && blockFlags && waits && refresh &&
-                        sampling && mirror && line && extra && drive;
+                        highByte && blockFlags && multiply && waits &&
+                        refresh && sampling && mirror && line && extra &&
+                        drive;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=DC"
               << " ticho=" << (settles ? "ok" : "chyba")
               << " porty=" << (aliases ? "ok" : "chyba")
@@ -3655,6 +3717,7 @@ int wmain(int argc, wchar_t** argv) {
               << " citanie=" << (readback ? "ok" : "chyba")
               << " hornybajt=" << (highByte ? "ok" : "chyba")
               << " priznaky=" << (blockFlags ? "ok" : "chyba")
+              << " nasobenie=" << (multiply ? "ok" : "chyba")
               << " cakacie=" << (waits ? "ok" : "chyba")
               << " obnovovanie=" << (refresh ? "ok" : "chyba")
               << " vzorkovanie=" << (sampling ? "ok" : "chyba")

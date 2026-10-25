@@ -3359,6 +3359,11 @@ a že časovač beží ďalej aj pri uvoľnenej zbernici. Rozhodnúť to vie
 meranie na skutočnom stroji: tá istá melódia alebo slučka v BASICu s
 `OUT 54,252` a bez neho — pomer dĺžok 1,43 znamená model, 1,30 druhé čítanie.
 
+**Rozhodnuté meraním (25. 10. 2026, 6.60): model platí.** EUTEST13 na
+skutočnej Eureke odmeral tie isté tri slučky bez obnovovania a s
+`OUT 54,252`: 5,52 → 7,93 s, 6,56 → 9,41 s a 6,90 → 9,90 s, pomer 1,437,
+1,434 a 1,435. Druhé čítanie by dalo 1,30.
+
 Obnovovanie sa pripočítava po inštrukciách, nie po strojových cykloch, a
 nerozlišuje SLEEP; celkový čas to nemení, len posúva takty v rámci
 inštrukcie. Pri vypnutom `REFE` (firmvér) je to nulový zásah — všetkých
@@ -5105,6 +5110,80 @@ prepočet po `OMCR` a chýbajúci prepočet po `DCNTL` — každá test zhodí.
 nerozlišuje sa, či `/M1` pri potvrdení prerušenia čaká inak. Rozšírená RAM
 na 40000h sa v tých meraniach nepoužila.
 
+### 6.60 Čo ešte vydal balík Jiřího Zadražila
+
+Okrem opráv v 6.58 a 6.59 je v balíku (23. 10. 2026, mimo repozitára)
+materiál, ktorý stojí sám za seba. Tu je to, čo sa z neho prevzalo alebo
+overilo; celý balík sa nikam nedistribuuje.
+
+**Testovacie programy a výpisy zo stroja sú v `tools/eutest/`** (popis
+v `tools/README.md`). Generátory dajú bajtovo tie isté COM, aké bežali na
+skutočnej Eureke (SHA-256 sedí s tým, čo balík uvádza), a oba výpisy sú
+pôvodné súbory zo stroja; EUTEST13 má SHA-256 `45c7efa5…`, rovnaký, aký
+uvádza Jiřího porovnávací protokol. Bez nich by sa 6.58 a 6.59 nedali
+zopakovať.
+
+**Oba programy dobehnú v emulátore** (25. 10. 2026, sonda, vetva s 6.59):
+EUTEST10 aj EUTEST13 skončia `TEST COMPLETE` so skratkou BIOS-u aj bez nej
+a všetky prečítané registre sa zhodujú so strojom (P54 `3Ch`/`FCh`, P62
+`FFh`/`5Fh`, P63 `1Fh`). Kontrola MLT v EUTEST10 prejde. Časy zo sondy
+neznamenajú nič — hodiny stroja idú podľa hostiteľa a sonda beží bez brzdy.
+
+**DCNTL po načítaní programu: `3Ah` na stroji aj bez skratky, `38h` so
+skratkou.** Ovládač diskety z ROM nechá v DCNTL bit DIM1 (smer DMA 1,
+I/O → pamäť) z posledného čítania. EUTEST13 ho na stroji prečítal ako
+`3Ah`; v emulátore bez skratky BIOS-u (`EA4_BEZ_SKRATKY`) tiež `3Ah`,
+so skratkou `38h`, lebo skratka na DMA nesiaha. Čakacie bity sú v oboch
+rovnaké, takže na rýchlosť to vplyv nemá. EUTEST10 na stroji číta `38h` —
+meria po zápise súboru, keď smer ostal opačný. Je to vlastnosť skratky,
+nie chyba; kto by porovnával DCNTL so strojom, nech púšťa bez nej.
+
+**Obnovovanie pamäte je potvrdené** — pozri dodatok v 6.45.
+
+**BDOS funkcia 105 v ROM nie je.** Rozdeľovač na `1B025h` má
+`LD A,C / CP 2Eh / RET NC` (overené v dumpe), takže každú funkciu od 46
+vyššie odmietne bez slova a nič nevykoná. Čo presne volajúci dostane späť,
+sa nerozoberalo; Jiří hlási nuly a nedotknutý buffer, aj zo stroja. Program
+pre CP/M 3, ktorý si o čas pýta funkciu 105, ho teda nedostane ani na stroji.
+
+Inou cestou sa k nej tiež nedá prísť. Vstup BDOS je `JP C011h` na `C006h`
+(vektor na `0005h` nastavuje `196FD`); kód na `C011h` firmvér pri štarte
+skopíruje z `1930Fh` (`18099`: `LDIR` 256 bajtov na `C000h`). Ten si odloží
+registre, prepne zásobník, namapuje banku BDOS (CBR `0Eh`, CBAR `D0h`, preto
+je logické `D025h` fyzické `1B025h`) a skočí na `D000h`, odkiaľ vedie len cez
+rozdeľovač vyššie. `CP 69h` v celej ROM nie je.
+
+**Manuál si tu protirečí sám.** `BDOS.8` (súbor vo formáte WordStar, text
+treba čítať s orezaným ôsmym bitom) funkciu 105 `bdos_gettime` v tabuľke aj
+opisuje: dátum ako počet dní od 1. 1. 1978, hodiny a minúty v BCD, sekundy
+v A. Ale knižnice z tej istej diskety, ktoré si vývojár naozaj vkladal,
+`A4DOS.LIB` aj `CPM.LIB`, končia na 45 (`bdos_set_error_mode`) a
+`bdos_gettime` nepoznajú. ROM sa zhoduje s knižnicami, nie s textom
+kapitoly; funkcia 105 bola asi plánovaná alebo z inej verzie firmvéru.
+Pôvodná cesta Eureky k času je zariadenie **`dev_rtc`** (`DEVICES.10`),
+ktoré prečíta osem registrov hodín do `TIME_BUF`; EUTEST čítajú porty
+`90h`–`93h` priamo.
+
+**Úplný test MLT** (`CheckMultiply` v režime `dc`, `nasobenie=`): všetky
+dvojice operandov pre BC, DE, HL a SP, 262 144 prípadov, súčin aj to, že
+príznaky zostanú. ZEXDOC MLT nepozná, je len pre Z80. Prevzaté z testu
+v balíku. Overené mutáciou: zlý súčin pre SP aj nastavovaný príznak Z ho
+zhodia.
+
+**Vedľajší nález: token `mount:` v sonde disketu nezapíše.** Pri behu
+EUTEST sa ukázalo, že `mount:` vymení disketu bez `settleForSwap`, takže
+čo program zapísal, sa do priečinka nedostane — hoci `CLAUDE.md` píše, že
+všetky tokeny výmeny čakajú a zapisujú. `ram` a `folder` to robia správne.
+Neopravené, je to mimo tejto zmeny (`ea4-dn6`).
+
+**Čo sa neprevzalo:** kópia našich testov klávesnice, testy jadra, ktoré
+už kryje režim `dc`, voliteľná diagnostika zvuku (sonda má `wav:`),
+spúšťacie skripty balíka a úprava `localtime_r` pre jeho linuxový
+harness. Braillovské zmeny a zvuková latencia sa posudzujú samostatne.
+Hlásené chyby z balíka sú v beadoch: štvoršípkový vypínací akord na Jiřího
+Windows (`ea4-46b`), oneskorenie braillu (`ea4-sk1`), hlásenie Defendera na
+staršej zostave (`ea4-jsz`).
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
@@ -5121,6 +5200,7 @@ V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
 | `melodies.py` | vyrenderuje melódie z ROM do `audio/melodie/` |
 | `check_io_names.py` | overí `src/eureka_io.h` proti `IOPORT.LIB`, `IOREG.LIB`, `SYSEQU.LIB` a `KB.H` |
 | `drive_steps.py IN OUT T0 T1 KROK…` | vystrihne kroky hlavičky z nahrávky mechaniky a odčíta z nich šum točenia (6.54) |
+| `eutest/` | generátory EUTEST10/13 od Jiřího Zadražila, ich výpisy zo skutočnej Eureky a porovnanie výpisov (6.60) |
 
 Príklad:
 
