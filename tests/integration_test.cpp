@@ -136,8 +136,8 @@ bool CheckBraille(EurekaMachine& machine, const EurekaMachine& booted) {
 }
 
 // Runs the machine a fixed budget of steps, enough for one HoldMembrane
-// state to clear kHoldStepMs's debounce queue and for the ROM to scan and
-// react to it.  Not "until quiet" the way diag_probe waits -- this is a
+// state to clear the debounce queue (kMinPressMs at a turning point) and for
+// the ROM to scan and react to it.  Not "until quiet" the way diag_probe waits -- this is a
 // model-level test, not a probe session, and a fixed budget keeps it fast.
 void RunHeldState(EurekaMachine& machine) {
   for (int step = 0; step < 2'000'000; ++step) machine.Step();
@@ -228,6 +228,65 @@ bool CheckChordBuilding(EurekaMachine& machine, const EurekaMachine& booted) {
     ok = false;
   }
   return ok;
+}
+
+// Runs the machine for `ms` milliseconds of guest time.
+void RunMs(EurekaMachine& machine, uint32_t ms) {
+  const uint64_t until =
+      machine.cycles() + uint64_t{ms} * EurekaMachine::kCpuHz / 1000;
+  while (machine.cycles() < until) machine.Step();
+}
+
+// Pins ea4-atx: chords typed the way fingers type, through HoldMembrane.  The
+// fingers of each chord land 10 ms apart and lift 10 ms apart, the chord is
+// held 60 ms and the next one starts 15 ms after the last finger lifted.  The
+// ROM debounces by itself -- every change re-arms C61Eh with 3 (1D1FA) and
+// the chord is decoded after three quiet ticks -- so the host must pass the
+// states on the way through at once and keep only the peak and the trough
+// long enough to be decoded.  Holding every state 40 ms instead made the ROM
+// see each finger 40 ms after the previous one, and of q, l, p typed like
+// this only "q" came through.
+bool CheckFastChords(EurekaMachine& machine, const EurekaMachine& booted) {
+  using namespace hw;
+  static const std::vector<uint8_t> kChords[] = {
+      {kBkbDot1, kBkbDot2, kBkbDot3, kBkbDot4, kBkbDot5},  // q
+      {kBkbDot1, kBkbDot2, kBkbDot3},                      // l
+      {kBkbDot1, kBkbDot2, kBkbDot3, kBkbDot4},            // p
+  };
+  machine.CopyStateFrom(booted);
+  machine.QueueKey(0xd0);  // Shift+F1, the word processor
+  for (int step = 0; step < 8'000'000; ++step)
+    if (!machine.Step() && machine.queued_keys() == 0) break;
+
+  for (const auto& dots : kChords) {
+    uint8_t held = 0;
+    for (uint8_t dot : dots) {
+      held |= dot;
+      machine.HoldMembrane(held, 0, 0);
+      RunMs(machine, 10);
+    }
+    RunMs(machine, 50);
+    for (uint8_t dot : dots) {
+      held &= static_cast<uint8_t>(~dot);
+      machine.HoldMembrane(held, 0, 0);
+      RunMs(machine, 10);
+    }
+    RunMs(machine, 5);
+  }
+  for (int step = 0; step < 8'000'000; ++step)
+    if (!machine.Step() && machine.queued_keys() == 0) break;
+
+  machine.TakeSpeechInput();
+  machine.QueueKey(0x85);  // Home, which speaks the line back
+  for (int step = 0; step < 8'000'000; ++step)
+    if (!machine.Step() && machine.queued_keys() == 0) break;
+  const auto spoken = machine.TakeSpeechInput();
+  if (Contains(spoken, "qlp")) return true;
+  std::cout << "  rychlo pisane akordy q l p precitane ako \"";
+  for (uint8_t byte : spoken)
+    std::cout << (byte >= 0x20 && byte < 0x7f ? static_cast<char>(byte) : '.');
+  std::cout << "\"\n";
+  return false;
 }
 
 // Shift with the bare space bar is Escape, decided at 1D52F: the decoder finds
@@ -3359,9 +3418,12 @@ int wmain(int argc, wchar_t** argv) {
 
   if (std::wstring(argv[3]) == L"akord") {
     const auto booted = BootedSnapshot(*machine);
-    const bool passed = CheckChordBuilding(*machine, *booted);
+    const bool building = CheckChordBuilding(*machine, *booted);
+    const bool fast = CheckFastChords(*machine, *booted);
+    const bool passed = building && fast;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=AKORD"
-              << " skladanie=" << (passed ? "ok" : "chyba") << "\n";
+              << " skladanie=" << (building ? "ok" : "chyba")
+              << " rychle=" << (fast ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
   }
 

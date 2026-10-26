@@ -170,7 +170,8 @@ void EurekaMachine::PowerOn() {
   shiftTapUntil_ = 0;
   holdQueue_.clear();
   holdState_ = MembraneHold();
-  holdUntil_ = 0;
+  holdSince_ = 0;
+  holdRising_ = false;
   poweredOff_ = false;
   consoleOutput_.clear();
   speechInput_.clear();
@@ -591,14 +592,12 @@ constexpr uint32_t kHoldMs = 100;
 // heartbeat that drives the scan at 1D1AE.  A host that reports key releases
 // cuts a press back to this, so a tap answers without waiting out kPressMs.
 constexpr uint32_t kMinPressMs = 40;
-// Minimum dwell time for one state of HoldMembrane's live layer, so two
-// finger movements inside one scan cannot pass the ROM a state it has no
-// chance of seeing -- the same debounce kMinPressMs gives a scripted tap.
-// TODO(ea4-v1j step 3): measured, not guessed yet; starts at kMinPressMs on
-// the strength of the same three-heartbeat-tick argument, but the owner's
-// partial-chord measurements (dot 1 -> "a", +2 -> "b", +4 -> "f") are what
-// this has to survive, and that has not been run against the model yet.
-constexpr uint32_t kHoldStepMs = kMinPressMs;
+// How long a turning point of HoldMembrane's live layer stays -- see
+// ReadMembraneKeyboard.  Noticing is not decoding: the scan that sees a change
+// comes up to one tick after it, and only three quiet ticks after that scan
+// does the ROM take the chord, so four ticks (53.3 ms).  At kMinPressMs a
+// chord held 60 ms right after another one was measured lost (ea4-atx).
+constexpr uint32_t kHoldTurnMs = 55;
 // How long TapShift holds shift down.  The slowest reader that stops on it is
 // the melody player: it reads row 8Ch at 10F13 every 13.7 to 20.0 ms of guest
 // time and stops only on a bit its last read did not have (shadow refreshed
@@ -642,10 +641,30 @@ uint8_t EurekaMachine::ReadMembraneKeyboard(uint8_t port) {
   // this.  The last state queued is left on the ports -- unlike a frame nothing
   // ever pops it off on its own, because nobody presses "release" on a key
   // that is simply not held any more; the next HoldMembrane call says so.
-  if (port == hw::kBkbDots && cycles_ >= holdUntil_ && !holdQueue_.empty()) {
-    holdState_ = holdQueue_.front();
-    holdQueue_.pop_front();
-    holdUntil_ = cycles_ + MsToCycles(kHoldStepMs);
+  //
+  // How long a state stays depends on where the hand is.  The ROM's debounce
+  // is what makes a chord: every change re-arms C61Eh with 3 (1D1FA) and the
+  // chord is decoded only after three quiet ticks of the 75 Hz heartbeat.  So
+  // only the turning points have to last kHoldTurnMs: the peak, which is the
+  // chord, and the trough between two chords, without which the ROM never
+  // clears its accepted-chord mask C637h and drops the next chord's first
+  // finger.  States on the way up or down pass at once, as a scan on the real
+  // keyboard samples whatever the fingers have reached by then.  Holding every
+  // state 40 ms (kMinPressMs) instead made the ROM see fingers landing 10 ms
+  // apart 40 ms apart, delayed the chord 40 ms per finger, and left each
+  // intermediate state on the edge of being taken as a partial chord
+  // (ea4-atx, HANDOFF 6.57).
+  if (port == hw::kBkbDots && !holdQueue_.empty()) {
+    const MembraneHold& next = holdQueue_.front();
+    const bool onward = holdRising_ ? next.Contains(holdState_)
+                                    : holdState_.Contains(next);
+    const uint32_t dwell = onward ? 0 : kHoldTurnMs;
+    if (cycles_ >= holdSince_ + MsToCycles(dwell)) {
+      holdRising_ = next.Contains(holdState_);
+      holdState_ = next;
+      holdQueue_.pop_front();
+      holdSince_ = cycles_;
+    }
   }
   switch (port) {
     case hw::kBkbDots:
@@ -676,12 +695,13 @@ bool EurekaMachine::MembraneBusy() const {
 
 // Sets the live matrix state for the nineteen non-shift membrane keys.  Queued
 // rather than written straight to holdState_, and through the same
-// hw::kBkbDots read that steps the frame queue, for the reason kHoldStepMs
-// documents: a state that came and went between two reads would otherwise be
-// invisible to the ROM's scan.  A call that repeats the state already at the
-// back of the queue (or, when the queue is empty, already on the ports) is
-// dropped rather than queued, so a key that keeps being reported down for
-// every host repeat does not grow the queue without bound.
+// hw::kBkbDots read that steps the frame queue, for the reason
+// ReadMembraneKeyboard gives: a turning point that came and went between two
+// reads would otherwise be invisible to the ROM's scan.  A call that repeats
+// the state already at the back of the queue (or, when the queue is empty,
+// already on the ports) is dropped rather than queued, so a key that keeps
+// being reported down for every host repeat does not grow the queue without
+// bound.
 void EurekaMachine::HoldMembrane(uint8_t row0, uint8_t row1, uint8_t row2) {
   const MembraneHold requested{row0, row1,
                                 static_cast<uint8_t>(row2 & ~hw::kBkbShift)};
@@ -2001,7 +2021,8 @@ void EurekaMachine::PowerDown() {
   shiftTapUntil_ = 0;
   holdQueue_.clear();
   holdState_ = MembraneHold{};
-  holdUntil_ = 0;
+  holdSince_ = 0;
+  holdRising_ = false;
 }
 
 void EurekaMachine::RequestBiosDiskBypass(bool on) {

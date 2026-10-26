@@ -607,6 +607,12 @@ class EurekaMachine {
     uint8_t row1 = 0;
     uint8_t row2 = 0;
     bool operator==(const MembraneHold&) const = default;
+    // Every key `other` holds is held here too.
+    bool Contains(const MembraneHold& other) const {
+      return (row0 & other.row0) == other.row0 &&
+             (row1 & other.row1) == other.row1 &&
+             (row2 & other.row2) == other.row2;
+    }
   };
   uint64_t membraneMinUntil_ = 0;
   uint8_t membraneHeldKey_ = 0;
@@ -623,15 +629,21 @@ class EurekaMachine {
   // membraneShift_'s alone.  A small queue rather than one variable, because
   // a state change can arrive faster than the ROM's own scan: two changes
   // inside one heartbeat tick would otherwise let the ROM see only the
-  // second, exactly the debounce problem the frame queue's kMinPressMs
-  // already solves for scripted presses.  Ungrouped: this is the fingers on
-  // the matrix right now, not a sequence the machine is playing out, so
+  // second.  Only a chord's peak and the trough between chords stay long
+  // enough for the ROM to decode them (kHoldTurnMs); states on the way pass
+  // at once -- holding every state 40 ms made the ROM wait 40 ms per finger
+  // and sometimes take a partial chord (ea4-atx).  Ungrouped: this is the
+  // fingers on the matrix right now, not a sequence the machine is playing
+  // out, so
   // MembraneBusy and queued_keys count the queue, never holdState_ itself --
   // a finger left resting on a key must not stall a test's "run until idle"
   // loop the way a key actually in flight does.
   std::deque<MembraneHold> holdQueue_;
   MembraneHold holdState_;
-  uint64_t holdUntil_ = 0;
+  // When holdState_ went on the ports, and whether it was reached by adding
+  // fingers -- together they say whether it is a turning point.
+  uint64_t holdSince_ = 0;
+  bool holdRising_ = false;
   bool poweredOff_ = false;
   std::vector<uint8_t> consoleOutput_;
   std::vector<uint8_t> speechInput_;

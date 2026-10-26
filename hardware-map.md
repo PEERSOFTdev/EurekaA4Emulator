@@ -772,6 +772,14 @@ Cesta od stlačenia ku kódu má tri kroky a každý má vlastné časovanie:
    dekodér (1D1D5 → D41C → D4B0). Každá ďalšia zmena riadka počítadlo
    znovu naplní, takže **všetko, čo sa stlačí do troch tikov (asi
    40 ms), je jeden akord**.
+4. **Prijatie a pustenie** (HANDOFF 6.57). Pri nule `C61E` sa uloží akord
+   do `C634`, znak do `C61C`, negovaný akord do `C637` a začne ozvena.
+   Ďalšie prsty sa potom ignorujú, kým sa nepustí všetko; do fronty ROM
+   (`C67A`…) ide znak až po úplnom pustení a ďalších troch tichých tikoch.
+   Prázdna matica musí vydržať, kým sa pustenie dekóduje (`C637` = `FFh`),
+   inak `1D51E` zahodí prvý prst ďalšieho akordu. Od zmeny po prijatie je
+   to najviac štyri tiky (53,3 ms), lebo sken zmenu zbadá až na
+   najbližšom tiku.
 
 Z bodu 3 plynie nepríjemnosť pre modifikátor ALT: medzerník stlačený
 súčasne s kurzorom sa dekóduje ako braillov znak a kurzor sa zahodí

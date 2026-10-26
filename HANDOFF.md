@@ -499,6 +499,11 @@ oddelený zámerne, nie zabudnutý: nejde cez debounce frontu, ktorou
 `HoldMembrane` prechádza (`kHoldStepMs`), lebo naň nič nebrzdí — pozri
 komentár nad `HoldShift` v `machine.h`.
 
+**`kHoldStepMs` už neexistuje (26. 10. 2026, ea4-atx).** Držanie každého
+stavu 40 ms bolo príčinou oneskorených a stratených akordov. Živá vrstva
+teraz drží len body obratu (vrchol akordu a prázdnu maticu medzi akordmi),
+stavy po ceste prejdú hneď — viď 6.57.
+
 Overené aj to, čo sa dalo pokaziť: `Shift+F9` a `Shift+F10` sú akordy
 medzerníka, ktoré shift bit zámerne nenesú, a s držaným shiftom
 dekódujú **rovnako** („nabitá", „sebekontrola"). Naopak `F1` sa
@@ -4843,6 +4848,76 @@ predvolené) alebo o rad vyššie (`R E W`, `U I O`):
 očakávania. Je to jediné doloženie — `emulator_thread.o` nie je v žiadnom
 teste, takže 24 `PASS` o tomto preklade nehovorí nič a pri zásahu do
 `DotsByPlace` treba skúšku v okne zopakovať.
+
+### 6.57 Rýchlo písané akordy meškali a strácali sa — príčina bola v emulátore (26. 10. 2026, `ea4-atx`)
+
+Majiteľ hlásil, že akordy s viacerými bodmi (päťbodové, ale aj „l“ a „x“)
+pri rýchlom písaní odpovedajú neskoro alebo sa stratia, na Logitechu aj na
+klávesnici notebooku; dvojbodové sa zdali rýchlejšie. Záznam
+`GetAsyncKeyState` ukázal, že oba rady hlásia päť aj šesť klávesov naraz,
+takže hostiteľská klávesnica to nebola. Nebol to ani návrh ROM. Bola to
+fronta živej vrstvy `HoldMembrane`.
+
+**Ako ROM berie akord** (odmerané sondou po krokoch 1 ms, výpis zmien
+v `C610h`–`C6A0h`):
+
+- Heartbeat beží asi 75 Hz (tik 13,3 ms) a sken na `1D1A9` porovná riadky
+  s tieňmi `C62E`–`C630`. Pri zmene uloží na `1D1FA`/`1D222` nový stav do
+  `C631`… a nastaví `C61E` = 3.
+- Každý tichý tik `C61E` zníži; pri nule je akord **prijatý**: `C634` =
+  akord, `C61C` = znak (12345 → `71h` „q“), `C637` = negovaný akord
+  a začne ozvena (`C621`).
+- Do fronty ROM (`C67A`/`C67D`/`C67E`) ide znak až po pustení **všetkých**
+  klávesov a ďalších troch tichých tikoch.
+- Stav teda stačí **vidieť** jeden tik, ale **prijatý** je až po troch
+  tichých tikoch, a sken, ktorý zmenu zbadá, príde až o tik neskôr. Najhorší
+  prípad je štyri tiky, 53,3 ms.
+- Kým nula po akorde nevydrží do dekódovaného pustenia (`C637` = `FFh`),
+  prvý prst ďalšieho akordu ROM zahodí (`AND (HL); RET Z` na `1D51E`).
+- Ukážkový `TECHMAN1/KEYSCAN.MAC` robí to isté: akord sa vezme, keď sú
+  klávesy ~20 ms stabilné, a ďalšie prsty sa ignorujú, kým sa nepustí
+  všetko. Prsty, ktoré dopadnú ďalej od seba, než je okno debounce, dajú
+  aj na skutočnom stroji čiastočný akord — to je návrh, nie chyba.
+
+**Čo robil emulátor.** `ReadMembraneKeyboard` držal **každý** stav
+z fronty `kHoldStepMs` = 40 ms, teda presne tri tiky. Dva následky:
+
+- ROM videla prsty, ktoré dopadli 10 ms po sebe, 40 ms po sebe (stavy na
+  8, 48, 88, 128 ms) a päťbodový akord prijala až po 128–168 ms namiesto
+  48. Rovnako sa predlžovalo pustenie a ďalší akord čakal vo fronte za ním.
+  Oneskorenie rástlo o 40 ms na prst — preto dvojbodové trpeli najmenej.
+- Medzistav držaný 40 ms sedí presne na hrane prijatia, takže o tom, či ROM
+  prijme **čiastočný** akord, rozhodovala fáza tiku. Odtiaľ stratené
+  a zlé akordy; pri prstoch 10 ms od seba 12345 nezaznelo vôbec.
+
+**Oprava.** `kHoldStepMs` je preč. Stav z fronty prejde hneď, keď ruka
+pokračuje tým istým smerom (pribúdajú prsty a ďalší stav obsahuje terajší,
+alebo ubúdajú a terajší obsahuje ďalší — `MembraneHold::Contains`). Len
+body obratu — vrchol, teda akord, a prázdna matica medzi akordmi — zostanú
+`kHoldTurnMs` = 55 ms, teda nad štyrmi tikmi. So 40 ms sa akord „l“ držaný
+60 ms hneď po „q“ stratil (odmerané). Stav nesú `holdSince_`
+a `holdRising_`.
+
+**Odmerané** (sonda, tri akordy q l p, držanie 30/60/100 ms × medzera
+5/15/40 ms): nová verzia dá „qlp“ vo všetkých deviatich; stará pri
+držaní 30 ms nedala nič, pri väčšine len „q“ a všetky tri len pri 60 ms
+a medzere 40 ms. Prsty 10 a 20 ms od seba: akord prijatý 48 ms po
+poslednom prste, rovnako ako súčasne stlačený, a pustenie už nemešká.
+Pomalé čiastočné akordy z ea4-v1j (1 → +2 → +4 = „f“) sú bajtovo rovnaké
+ako predtým.
+
+**Drží to** `integration_test … akord`, kontrola `CheckFastChords`
+(výpis `rychle=ok`): prsty 10 ms od seba hore aj dole, držanie 60 ms,
+medzera 15 ms, očakáva „qlp“. Overené mutáciou: každý stav 40 ms dá
+nezmysel, bod obratu 40 ms dá „q “.
+
+**Otvorené, mimo rozsahu:** `kMinPressMs` = 40 ms pre skriptované
+stlačenie skrátené pustením hostiteľa má ten istý argument štyroch tikov
+(40 < 53,3). Nemerané, bead `ea4-rwq`.
+
+Mimo repozitára ležia skript majiteľa na meranie klávesnice
+(`C:\b\akordy-test.ps1`) a dočasná sonda s tokenmi `h:`, `r:`, `run:`
+a `runw:` (`C:\b\ea4-atx`).
 
 ## 7. Nástroje
 

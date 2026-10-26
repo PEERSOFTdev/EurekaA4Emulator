@@ -267,7 +267,11 @@ them on the same diskette.
   be silent: the matrix falls back to a state already seen, not a new one.
   What lands in the text once 1 and 2 also let go is checked by reading the
   line back with Home: "f", the union of every dot the fingers reached during
-  the one continuous press. Needs no files on the disk.
+  the one continuous press. It also pins fast typing (`rychle=`, ea4-atx,
+  HANDOFF 6.57): three chords q, l, p with fingers landing and lifting 10 ms
+  apart, each held 60 ms with 15 ms between them, have to come out as "qlp".
+  Holding every intermediate state 40 ms gives garbage, holding the turning
+  points only 40 ms gives "q ". Needs no files on the disk.
 - `budik` pins waking a switched-off machine on its alarm (HANDOFF 6.32).  It
   arms an alarm through F2 and Shift+F3, leaves to the Main Menu with Escape
   and switches off with the cursor chord, then moves the clock ten seconds
