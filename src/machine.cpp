@@ -588,22 +588,26 @@ constexpr uint32_t kReleaseMs = 80;
 // above the host's repeat interval (about 33 ms) is enough to keep the key
 // continuously down for as long as the user holds it.
 constexpr uint32_t kHoldMs = 100;
-// Shortest press the ROM is guaranteed to notice: three ticks of the 75 Hz
-// heartbeat that drives the scan at 1D1AE.  A host that reports key releases
-// cuts a press back to this, so a tap answers without waiting out kPressMs.
-constexpr uint32_t kMinPressMs = 40;
+// Shortest press the ROM is guaranteed to take: the same four ticks as
+// kHoldTurnMs below.  A host that reports key releases cuts a press back to
+// this, so a tap answers without waiting out kPressMs.  It was 40 ms, three
+// ticks, and a quick tap of F10 was measured lost at every phase of the tick
+// up to 30 ms and at some up to 50 ms (ea4-rwq, HANDOFF 6.57).
+constexpr uint32_t kMinPressMs = 55;
 // How long a turning point of HoldMembrane's live layer stays -- see
 // ReadMembraneKeyboard.  Noticing is not decoding: the scan that sees a change
 // comes up to one tick after it, and only three quiet ticks after that scan
-// does the ROM take the chord, so four ticks (53.3 ms).  At kMinPressMs a
-// chord held 60 ms right after another one was measured lost (ea4-atx).
+// does the ROM take the chord, so four ticks (53.3 ms).  At 40 ms a chord
+// held 60 ms right after another one was measured lost (ea4-atx).
 constexpr uint32_t kHoldTurnMs = 55;
 // How long TapShift holds shift down.  The slowest reader that stops on it is
 // the melody player: it reads row 8Ch at 10F13 every 13.7 to 20.0 ms of guest
 // time and stops only on a bit its last read did not have (shadow refreshed
 // at 10F1B), so a tap has to span one of its reads.  Measured through the
 // whole jingle, pulses from 20 ms up stopped it every time; this is two of
-// its reads, and the same three heartbeat ticks as kMinPressMs (HANDOFF 6.35).
+// its reads and three ticks of the 75 Hz heartbeat (HANDOFF 6.35).  Not tied
+// to kMinPressMs: the speech and melody loops compare rows against shadows
+// on their own, without the scan's four-tick count.
 constexpr uint32_t kShiftTapMs = 40;
 
 // Two codes are the same physical key if they differ only in their modifiers;
@@ -650,7 +654,7 @@ uint8_t EurekaMachine::ReadMembraneKeyboard(uint8_t port) {
   // clears its accepted-chord mask C637h and drops the next chord's first
   // finger.  States on the way up or down pass at once, as a scan on the real
   // keyboard samples whatever the fingers have reached by then.  Holding every
-  // state 40 ms (kMinPressMs) instead made the ROM see fingers landing 10 ms
+  // state 40 ms instead made the ROM see fingers landing 10 ms
   // apart 40 ms apart, delayed the chord 40 ms per finger, and left each
   // intermediate state on the edge of being taken as a partial chord
   // (ea4-atx, HANDOFF 6.57).

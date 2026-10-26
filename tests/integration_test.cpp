@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "eureka_io.h"
@@ -289,6 +290,192 @@ bool CheckFastChords(EurekaMachine& machine, const EurekaMachine& booted) {
   return false;
 }
 
+// Runs the machine and collects every key code the ROM takes, in the order it
+// takes them.  The codes land in the ROM's key ring, 32 two-byte entries at
+// C67Bh with the write index at C67Ah; 1DCCC-1DCD8 advances the index and
+// stores one, so by 1DCD9 the newest is in place.  Reading the ring there
+// rather than C638 catches two chords taken between two looks, and a chord
+// that never came.
+class KeyRecorder {
+ public:
+  explicit KeyRecorder(EurekaMachine& machine) : machine_(machine) {}
+
+  void RunMs(unsigned ms) {
+    const uint64_t until = machine_.cycles() + EurekaMachine::kCpuHz / 1000 * ms;
+    while (machine_.cycles() < until) {
+      if (machine_.physical_pc() == 0x1dcd9) {
+        // C67Ah already holds the index after the entry (1DCD3).
+        const unsigned index = (machine_.debug_peek(0xc67a) - 1u) & 0x1f;
+        const uint16_t at = static_cast<uint16_t>(0xc67b + 2 * index);
+        codes_.push_back(static_cast<uint16_t>(machine_.debug_peek(at) << 8 |
+                                               machine_.debug_peek(at + 1)));
+      }
+      // Switched off, the machine stops counting cycles, and this would spin.
+      if (!machine_.Step()) break;
+      if ((++steps_ & 0xfff) == 0) {
+        machine_.TakeAudio();
+        machine_.TakeSpeechInput();
+        machine_.TakeConsoleOutput();
+      }
+    }
+  }
+
+  // Lays the dots of `mask` down one finger at a time, `apartMs` from each
+  // other, lowest dot first or last, holds the whole chord `holdMs`, and lifts
+  // the fingers in the opposite order, `liftApartMs` from each other.  This is
+  // what the window sends: one HoldMembrane call per key message.
+  void Fingers(uint8_t mask, unsigned apartMs, unsigned holdMs,
+               unsigned liftApartMs, bool highFirst = false) {
+    std::vector<uint8_t> dots;
+    for (unsigned bit = 0; bit < 6; ++bit)
+      if (mask & (1u << bit)) dots.push_back(static_cast<uint8_t>(1u << bit));
+    if (highFirst) std::reverse(dots.begin(), dots.end());
+    uint8_t down = 0;
+    for (uint8_t dot : dots) {
+      down |= dot;
+      machine_.HoldMembrane(down, 0, 0);
+      RunMs(apartMs);
+    }
+    RunMs(holdMs);
+    std::reverse(dots.begin(), dots.end());
+    for (uint8_t dot : dots) {
+      down &= static_cast<uint8_t>(~dot);
+      machine_.HoldMembrane(down, 0, 0);
+      RunMs(liftApartMs);
+    }
+  }
+
+  std::vector<uint16_t> Take() { return std::exchange(codes_, {}); }
+
+ private:
+  EurekaMachine& machine_;
+  std::vector<uint16_t> codes_;
+  uint64_t steps_ = 0;
+};
+
+void PrintCodes(const std::vector<uint16_t>& codes) {
+  for (uint16_t code : codes) std::cout << ' ' << std::hex << code << std::dec;
+}
+
+// The breadth CheckFastChords leaves out: every one of the 63 dot patterns
+// typed finger by finger, against the code the ROM gives the same dots pressed
+// as one finished chord (PressBraille), and the cases where a turning point
+// matters most -- the same chord over and over with no gap, a finger lifted
+// out of the middle of a chord, and a long run of brisk typing.  The cases
+// follow the regression set Jiří Zadražil measured ea4-atx on before it was
+// fixed; on the 40 ms layer 359 of his 448 failed (HANDOFF 6.57).
+bool CheckEveryChordAtSpeed(EurekaMachine& machine, const EurekaMachine& booted) {
+  machine.CopyStateFrom(booted);
+  machine.QueueKey(0xd0);  // Shift+F1, the word processor
+  for (int step = 0; step < 8'000'000; ++step) machine.Step();
+  auto editor = std::make_unique<EurekaMachine>();
+  editor->CopyStateFrom(machine);
+  KeyRecorder keys(machine);
+
+  std::array<std::vector<uint16_t>, 64> expected;
+  for (unsigned mask = 1; mask < 64; ++mask) {
+    machine.CopyStateFrom(*editor);
+    keys.Take();
+    machine.PressBraille(static_cast<uint8_t>(mask));
+    keys.RunMs(650);
+    expected[mask] = keys.Take();
+    // Five chords queue nothing on their own -- dot 5, dot 6, 4-6, 4-5-6 and
+    // 3-4-5-6, measured: prefixes for computer braille, capitals, control
+    // characters and numbers, which act on the chord after them (HANDOFF
+    // 6.57) -- so "no code" is a valid answer to match too.
+    if (expected[mask].size() > 1) {
+      std::cout << "  hotovy akord " << std::hex << mask << std::dec
+                << " dal viac kodov:";
+      PrintCodes(expected[mask]);
+      std::cout << "\n";
+      return false;
+    }
+  }
+
+  bool ok = true;
+  const auto expect = [&](const std::vector<uint16_t>& want, const char* what,
+                          unsigned mask) {
+    const auto got = keys.Take();
+    if (got == want) return;
+    std::cout << "  " << what << " " << std::hex << mask << std::dec
+              << ": cakane";
+    PrintCodes(want);
+    std::cout << ", prislo";
+    PrintCodes(got);
+    std::cout << "\n";
+    ok = false;
+  };
+
+  // Every chord three ways: a tap with all fingers at once and no hold of its
+  // own, fingers 5 ms apart held 25 ms, and high dot first 15 ms apart, all
+  // lifted at once.
+  for (unsigned mask = 1; mask < 64; ++mask) {
+    const auto dots = static_cast<uint8_t>(mask);
+    machine.CopyStateFrom(*editor);
+    keys.Take();
+    keys.Fingers(dots, 0, 0, 0);
+    keys.RunMs(950);
+    expect(expected[mask], "tuknutie", mask);
+    machine.CopyStateFrom(*editor);
+    keys.Fingers(dots, 5, 25, 5);
+    keys.RunMs(950);
+    expect(expected[mask], "prsty po 5 ms", mask);
+    machine.CopyStateFrom(*editor);
+    keys.Fingers(dots, 15, 50, 0, true);
+    keys.RunMs(950);
+    expect(expected[mask], "prsty po 15 ms", mask);
+  }
+
+  // The same chord twelve times with no gap: all keys up is the trough that
+  // separates two characters, and lost, the twelve merge into fewer.
+  for (unsigned mask : {0x3du, 0x3fu}) {
+    machine.CopyStateFrom(*editor);
+    keys.Take();
+    for (int k = 0; k < 12; ++k)
+      keys.Fingers(static_cast<uint8_t>(mask), 2, 25, 0, k % 2 != 0);
+    keys.RunMs(2000);
+    expect(std::vector<uint16_t>(12, expected[mask][0]), "12x za sebou", mask);
+  }
+
+  // CheckChordBuilding's 1-2-4 with dot 4 let go first, at speed: still the
+  // union, "f", whatever the timing.
+  const uint8_t f = hw::kBkbDot1 | hw::kBkbDot2 | hw::kBkbDot4;
+  const uint8_t b = hw::kBkbDot1 | hw::kBkbDot2;
+  for (unsigned apart : {0u, 10u})
+    for (unsigned rest : {0u, 30u}) {
+      machine.CopyStateFrom(*editor);
+      keys.Take();
+      machine.HoldMembrane(hw::kBkbDot1, 0, 0);
+      keys.RunMs(apart);
+      machine.HoldMembrane(b, 0, 0);
+      keys.RunMs(apart);
+      machine.HoldMembrane(f, 0, 0);
+      keys.RunMs(30);
+      machine.HoldMembrane(b, 0, 0);
+      keys.RunMs(rest);
+      machine.HoldMembrane(0, 0, 0);
+      keys.RunMs(950);
+      expect(expected[f], "1-2-4 a rychlo pusteny bod 4", f);
+    }
+
+  // Brisk typing: twenty chords, y and the six-dot in turn, fingers 10 ms
+  // apart, held 60 ms, 80 ms between characters.  All twenty must arrive, in
+  // order, and not long after the last finger: a queue that falls behind
+  // shows here as typing still going on.
+  machine.CopyStateFrom(*editor);
+  keys.Take();
+  std::vector<uint16_t> stream;
+  for (int k = 0; k < 20; ++k) {
+    const unsigned mask = k % 2 ? 0x3f : 0x3d;
+    keys.Fingers(static_cast<uint8_t>(mask), 10, 60, 10, k % 2 != 0);
+    keys.RunMs(80);
+    stream.push_back(expected[mask][0]);
+  }
+  keys.RunMs(250);
+  expect(stream, "plynule pisanie", 0x3d);
+  return ok;
+}
+
 // Shift with the bare space bar is Escape, decided at 1D52F: the decoder finds
 // no dots on row 89h, looks at row 8Ch bit 6 and emits 1Bh instead of a space.
 // It is the only key code on this machine that needs two rows held at once, so
@@ -410,6 +597,37 @@ bool CheckShiftTap(EurekaMachine& machine, const EurekaMachine& booted) {
     ok = false;
   }
   return ok;
+}
+
+// A quick tap of F10 the way the window sends F9-F11 in braille mode: queued
+// as one finished chord and released at once (ReleaseKey), so the press is
+// cut to kMinPressMs.  The ROM takes a state only after four ticks of the
+// 75 Hz heartbeat, up to 53.3 ms depending on phase; at 40 ms every one of
+// these taps was lost (ea4-rwq, HANDOFF 6.57).  Twenty phases across 13.3 ms,
+// each from the Main Menu, where F10 is decoded at C638 (1D513).
+bool CheckQuickTap(EurekaMachine& machine, const EurekaMachine& booted) {
+  constexpr uint8_t kF10 = 0xc9;
+  constexpr uint64_t kPerMs = EurekaMachine::kCpuHz / 1000;
+  unsigned lost = 0;
+  for (unsigned phase = 0; phase < 20; ++phase) {
+    machine.CopyStateFrom(booted);
+    uint64_t until = machine.cycles() + phase * kPerMs * 2 / 3;
+    while (machine.cycles() < until) machine.Step();
+    machine.QueueKey(kF10);
+    until = machine.cycles() + kPerMs;
+    while (machine.cycles() < until) machine.Step();
+    machine.ReleaseKey(kF10);
+    bool taken = false;
+    for (int step = 0; step < 6'000'000 && !taken; ++step) {
+      machine.Step();
+      taken = machine.debug_peek(0xc638) == kF10;
+    }
+    lost += !taken;
+  }
+  if (lost == 0) return true;
+  std::cout << "  rychle tuknutie F10 sa stratilo v " << lost
+            << " fazach z 20\n";
+  return false;
 }
 
 // Types the same word on the optional IBM PC keyboard.  The emulator sends
@@ -3404,13 +3622,15 @@ int wmain(int argc, wchar_t** argv) {
                          CheckBrailleShiftSpace(*machine, *booted) &&
                          CheckBrailleShiftStopsSpeech(*machine, *booted);
     const bool tap = CheckShiftTap(*machine, *booted);
+    const bool quick = CheckQuickTap(*machine, *booted);
     const bool pc = CheckPcKeyboard(*machine);
     const bool altgr = CheckAltGr(*machine, *booted);
-    const bool passed = keys && braille && tap && pc && altgr;
+    const bool passed = keys && braille && tap && quick && pc && altgr;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=KBD"
               << " klavesy=" << (keys ? "ok" : "chyba")
               << " braille=" << (braille ? "ok" : "chyba")
               << " tuknutie=" << (tap ? "ok" : "chyba")
+              << " rychle=" << (quick ? "ok" : "chyba")
               << " pc=" << (pc ? "ok" : "chyba")
               << " altgr=" << (altgr ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
@@ -3420,10 +3640,12 @@ int wmain(int argc, wchar_t** argv) {
     const auto booted = BootedSnapshot(*machine);
     const bool building = CheckChordBuilding(*machine, *booted);
     const bool fast = CheckFastChords(*machine, *booted);
-    const bool passed = building && fast;
+    const bool every = CheckEveryChordAtSpeed(*machine, *booted);
+    const bool passed = building && fast && every;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=AKORD"
               << " skladanie=" << (building ? "ok" : "chyba")
-              << " rychle=" << (fast ? "ok" : "chyba") << "\n";
+              << " rychle=" << (fast ? "ok" : "chyba")
+              << " vsetky=" << (every ? "ok" : "chyba") << "\n";
     return passed ? 0 : 1;
   }
 
