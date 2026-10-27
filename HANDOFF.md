@@ -2690,6 +2690,10 @@ na Eureke nerobí nič (zmerané, tá istá tabuľka).
   5 252). Zvolených 40 ms sú dve čítania prehrávača a zároveň tri takty
   heartbeatu, rovnako ako `kMinPressMs`. Vzorková slučka reči číta riadky
   rýchlosťou DAC, tá pulz nemôže minúť.
+  *Od 26. 10. 2026 neplatí „rovnako ako `kMinPressMs`“:* to je teraz
+  55 ms, štyri takty, lebo skenovanie klávesnice berie stav až po nich
+  (`ea4-rwq`, HANDOFF 6.57). `kShiftTapMs` zostáva 40 ms — prehrávač
+  a slučka reči porovnávajú riadky s tieňom samy, bez toho počítania.
 
 #### Testy
 

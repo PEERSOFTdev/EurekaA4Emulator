@@ -137,7 +137,7 @@ bool CheckBraille(EurekaMachine& machine, const EurekaMachine& booted) {
 }
 
 // Runs the machine a fixed budget of steps, enough for one HoldMembrane
-// state to clear the debounce queue (kMinPressMs at a turning point) and for
+// state to clear the debounce queue (kHoldTurnMs at a turning point) and for
 // the ROM to scan and react to it.  Not "until quiet" the way diag_probe waits -- this is a
 // model-level test, not a probe session, and a fixed budget keeps it fast.
 void RunHeldState(EurekaMachine& machine) {
