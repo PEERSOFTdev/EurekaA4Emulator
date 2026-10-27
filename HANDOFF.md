@@ -4915,6 +4915,55 @@ nezmysel, bod obratu 40 ms dá „q “.
 stlačenie skrátené pustením hostiteľa má ten istý argument štyroch tikov
 (40 < 53,3). Nemerané, bead `ea4-rwq`.
 
+**`ea4-rwq` uzavreté (26. 10. 2026).** Odmerané na F10 z hlavného menu,
+tak ako ho okno v braillovskom režime posiela pre F9 – F11 (`QueueKey`
+a hneď `ReleaseKey`), dvadsať fáz proti tiku: stlačenie do 30 ms ROM
+nevezme ani raz, 45 ms 8-krát, 50 ms 15-krát, od 55 ms vždy. Svižné
+ťuknutie sa teda občas ticho stratilo. `kMinPressMs` je teraz 55 ms, ako
+`kHoldTurnMs`; dlhšie stlačenia sa nemenia. Drží to `CheckQuickTap`
+v režime `kbd` (`rychle=`): F10 pustené po 1 ms musí prejsť vo všetkých
+dvadsiatich fázach, so 40 ms neprejde ani v jednej. Komentár pri
+`PressPowerOffChord` — vypínací akord s okamžitým pustením ROM „nikdy
+nevidí“ — je odmeraný pri 40 ms a je to tá istá príčina; okno ho bez
+pustenia posiela ďalej, takže sa na tom nič nemení.
+
+**Rovnaká chyba z druhej strany (26. 10. 2026).** Balík opráv Jiřího
+Zadražila (23. 10. 2026, mimo repozitára, postavený nad `v2026.10.3`) ju
+našiel nezávisle a priniesol regresnú sadu: 63 masiek
+v šiestich časovaniach proti `PressBraille`, opakované a striedavé akordy,
+pomalé skladanie a systémové klávesy, spolu 448 prípadov, a 29 pri
+zmenených režimoch CPU. Na 40 ms vrstve zlyhalo 359 a 26 z nich, takmer
+všetky ako „neprišiel žiadny znak“. Na tejto oprave prejdú všetky; dvadsať
+„y“ s prstami 5 – 20 ms od seba príde všetkých dvadsať a rýchle pustenie
+bodu 4 z 1-2-4 dá „f“ vo všetkých 80 časovaniach. Jeho vlastná oprava
+a pravidlo emulátora Arie (`aria`: stlačenie hneď, pustenie až 54 ms po
+poslednom stlačení) dali na tých istých testoch to isté, pri rýchlo
+písanom troj- až šesťbode o 13 – 27 ms skôr; prevzalo sa to, čo už je
+tu.
+
+Z tej sady je `CheckEveryChordAtSpeed` v režime `akord` (`vsetky=`), lebo
+`CheckFastChords` drží jediný scenár: všetkých 63 kombinácií bodov po
+prstoch trojako proti tomu istému akordu cez `PressBraille`, dvanásť
+rovnakých akordov bez medzery, rýchle 1-2-4 s pusteným bodom 4 a dvadsať
+akordov plynulého písania. Kódy číta z kruhovej fronty ROM (`C67Bh`,
+index `C67Ah`, uloženie na `1DCCC`–`1DCD8`), takže vidí aj dva akordy
+medzi dvoma pohľadmi aj akord, ktorý neprišiel. Overené mutáciou: bod
+obratu 40 ms, vrchol bez čakania aj prázdna matica bez čakania zhodia
+`vsetky=` (aj `rychle=`).
+
+Päť akordov nedá kód hneď — bod 5, bod 6, 4-6, 4-5-6 a 3-4-5-6; sú medzi
+nimi predpony počítačového bodového písma, veľkých písmen, riadiacich
+znakov a čísel, a test ich porovnáva rovnako. Predpony platia v celom
+systéme, nie v jednej aplikácii: program v BASICu, ktorý hlási kódy
+klávesov, pri predpone nepovie nič a až pri nasledujúcom akorde ohlási
+rovno veľké písmeno, číslo a pod. (overil majiteľ). Vo fronte `C67Bh` je
+to vidno o krok skôr, odmerané: predponu veľkého písmena (bod 6) ROM
+zapíše ako `8001h` až spolu s nasledujúcim znakom, predponu skupiny
+veľkých písmen (body 5-6) hneď ako `8003h`, a písmená za oboma idú do
+fronty malé (`161h` je „a“) — veľké z nich teda robí ROM až pri čítaní
+z fronty. Predponu čísla (3-4-5-6) do fronty nezapíše vôbec a z
+nasledujúceho „a“ urobí rovno „1“ (`131h`).
+
 Mimo repozitára ležia skript majiteľa na meranie klávesnice
 (`C:\b\akordy-test.ps1`) a dočasná sonda s tokenmi `h:`, `r:`, `run:`
 a `runw:` (`C:\b\ea4-atx`).

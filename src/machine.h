@@ -208,8 +208,9 @@ class EurekaMachine {
   // command calls this rather than building the chord itself -- there is one
   // way to get it wrong and it is quiet.  Following the press with ReleaseKey
   // takes the "let go before the first scan" branch there, which cuts the
-  // press from kPressMs to kMinPressMs; measured, the ROM then never sees the
-  // chord at all and C45Ah stays 00 instead of FFh.  Nobody is holding a key
+  // press from kPressMs to kMinPressMs; measured while that was 40 ms, the
+  // ROM then never saw the chord at all and C45Ah stayed 00 instead of FFh
+  // (the four-tick count of HANDOFF 6.57).  Nobody is holding a key
   // when a menu item is chosen, so there is nothing to let go of: the press
   // ends on its own.
   void PressPowerOffChord() { QueueKey(0x8f); }
