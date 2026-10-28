@@ -226,6 +226,34 @@ constexpr uint8_t kRcrRefe = 0x80;
 constexpr uint8_t kRcrRefw = 0x40;
 constexpr uint8_t kRcrCyc = 0x03;
 
+// What a read adds to the value written.  UM005004 leaves RCR bits 5-2 and ICR
+// bits 4-0 unused, and the real Eureka reads them as ones: after the firmware
+// has written 00h to both, EUTEST13 got 3Ch from port 54 and 1Fh from port 63,
+// and FCh after `OUT 54,252` (HANDOFF 6.58).  Read only -- the bits a write
+// sets still go to io_ as written, which is what the refresh model looks at.
+constexpr uint8_t kRcrReadOnes = 0x3c;
+constexpr uint8_t kIcrReadOnes = 0x1f;
+
+// OMCR, the Z80180's Operation Mode Control Register.  IOREG.LIB does not have
+// it and the HD64180 has no register here, but the real Eureka answers: FFh
+// after switch-on, 5Fh after `OUT 62,1` (EUTEST13, HANDOFF 6.58).  The name and
+// the bits are Zilog's (UM005004, "Operation Mode Control Register"): M1E in
+// bit 7, M1TE in bit 6, write only, IOC in bit 5, bits 4-0 unused.  So a read
+// gives back bits 7 and 5 and ones everywhere else, 5Fh for 01h.
+constexpr uint8_t kOmcr = 0x3e;
+constexpr uint8_t kOmcrReset = 0xff;
+constexpr uint8_t kOmcrReadOnes = 0x5f;
+
+// M1E: while it is set, every opcode fetch carries the one extra wait state
+// z80.c has always charged (HANDOFF 6.10); clear it and the wait is gone.
+// `OUT 62,1` makes the delay loop of EUTEST10 26 T-states instead of 32,
+// measured on the real Eureka as 4,48 s against 5,52 s (HANDOFF 6.59).  That
+// the board keys it on /M1, which M1E gates, is our reading, not a schematic.
+// The wait overlaps DCNTL's MWI rather than adding to it, so a fetch waits
+// max(board, MWI).
+constexpr uint8_t kOmcrM1e = 0x80;
+constexpr unsigned kBoardM1Wait = 1;
+
 // HD64180Z manual, ITC: TRAP is set by an undefined op code and software can
 // only write it to 0; UFO says whether the third op code byte was the
 // undefined one and is read-only.  WBOOT at E6B3h (196B3) tests TRAP.

@@ -2,8 +2,9 @@
 
 // MARK: timings
 // Z180 T-states from Zilog UM005004, Tables 38-47, one row per high nibble.
-// They leave out every wait state: the one on each opcode fetch is m1_wait
-// below, and the ones on external I/O are added by the machine, which knows
+// They leave out every wait state: the board's one on each opcode fetch is
+// z->m1_wait (see below), DCNTL's memory waits are mem_wait, charged in rb()
+// and wb(), and the ones on external I/O are added by the machine, which knows
 // DCNTL.  A conditional instruction is listed at its not-taken cost; the rest
 // is added where the condition is decided.  Undocumented opcodes, which a real
 // Z180 traps, are charged as their unprefixed form plus the prefix fetch.
@@ -72,7 +73,9 @@ static const uint8_t cyc_ddfd[256] = {
 // 256 x 24 = 6144, one millisecond at 6.144 MHz.  What adds it on the board is
 // not documented.  With it the tone generator's interrupt leaves the ROM's note
 // timer the share the recording of a real machine asks for (HANDOFF 6.10).
-static const unsigned m1_wait = 1;
+// It is a field, z->m1_wait, rather than a constant, because the board's wait
+// goes away with OMCR's M1E and overlaps DCNTL's MWI; the machine works out
+// how much of it is left (HANDOFF 6.59).  z80_init sets it to 1.
 
 // MARK: helpers
 
@@ -993,11 +996,12 @@ void z80_init(z80* const z) {
   z->z180_traps = 0;
   z->trap = 0;
   z->mem_wait = 0;
+  z->m1_wait = 1;
 }
 
 // executes the next instruction in memory
 void z80_execute(z80* const z) {
-  z->cyc += m1_wait;
+  z->cyc += z->m1_wait;
   if (z->halted) {
     exec_opcode(z, 0x00);
   } else {
@@ -1497,7 +1501,7 @@ void exec_opcode(z80* const z, uint8_t opcode) {
 
 // executes a DD/FD opcode (IZ = IX or IY)
 void exec_opcode_ddfd(z80* const z, uint8_t opcode, uint16_t* const iz) {
-  z->cyc += m1_wait + cyc_ddfd[opcode];
+  z->cyc += z->m1_wait + cyc_ddfd[opcode];
   inc_r(z);
   if (!z180_ddfd_defined(opcode) && z180_trap(z, z->pc - 2, false)) return;
 
@@ -1662,7 +1666,7 @@ void exec_opcode_cb(z80* const z, uint8_t opcode) {
   // UM005004 Table 39: BIT takes 6 on a register and 9 on (HL); the rotates,
   // SET and RES take 7 and 13.  (It prints 3 for SRL (HL), a misprint among
   // siblings that all say 13.)
-  z->cyc += m1_wait + (x_ == 1 ? (z_ == 6 ? 9 : 6) : (z_ == 6 ? 13 : 7));
+  z->cyc += z->m1_wait + (x_ == 1 ? (z_ == 6 ? 9 : 6) : (z_ == 6 ? 13 : 7));
 
   uint8_t hl = 0;
   uint8_t* reg = 0;
@@ -1781,7 +1785,7 @@ void exec_opcode_dcb(z80* const z, uint8_t opcode, uint16_t addr) {
 
 // executes a ED opcode
 void exec_opcode_ed(z80* const z, uint8_t opcode) {
-  z->cyc += m1_wait + cyc_ed[opcode];
+  z->cyc += z->m1_wait + cyc_ed[opcode];
   inc_r(z);
   if (!z180_ed_defined(opcode) && z180_trap(z, z->pc - 2, false)) return;
   switch (opcode) {

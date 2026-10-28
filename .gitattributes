@@ -39,3 +39,9 @@
 # 6.55). Ten istý dôvod: nulové bajty v nich sú dnes, nie zárukou.
 tools/dumprom/DUMPROM.COM binary
 tools/dumprom/DUMPROM.IMG binary
+
+# Výpisy EUTEST10/13 zo skutočnej Eureky (HANDOFF 6.60). Sú to súbory CP/M:
+# CRLF a dĺžka v násobkoch 128-bajtových záznamov, čo `compare_measurements.py`
+# kontroluje. Konverzia koncov riadkov by ich zmenila a s nimi aj ich SHA-256,
+# ktorými sú v HANDOFF doložené. Posledné z toho istého dôvodu ako vyššie.
+tools/eutest/stroj/*.TXT -text

@@ -199,11 +199,21 @@ Z firmvéru sa tam dostať nedá, z klávesnice áno — vstavaný BASIC preklad
 5–4 (`IWI`) 1 až 4 do **externého I/O** cyklu. Firmvér zapisuje `38h`, teda
 MWI = 0 a IWI = 3, a už to nemení; z BASICu sa to prestaviť dá (HANDOFF 6.43).
 
+Na cykle M1 pridáva jeden čakací stav aj doska, kým je v `OMCR` (port `3Eh`)
+zapnutý bit M1E. S MWI sa nesčítava, načítanie kódu čaká max(doska, MWI).
+`OUT 62,1` M1E vypne a stroj beží asi o pätinu rýchlejšie, `OUT 62,255` ho
+vráti. Odmerané na skutočnej Eureke (HANDOFF 6.59).
+
 Obnovovanie dynamickej pamäte riadi `rcr` (port `36h`). Po resete je `FCh`,
 teda zapnuté, tri takty z každých desiatich; firmvér ho na `00018` vypne
 zápisom `00h`. Pamäť Eureky je statická (`HARDWARE.1`: „CMOS static memory
 devices are used exclusively“), takže obnovovanie jej nič nedáva a len
 berie takty. Z BASICu ho `OUT 54,252` zapne späť (HANDOFF 6.45).
+
+Nepoužité bity sa čítajú ako jednotky: `rcr` po štarte číta `3Ch`, `icr`
+(port `3Fh`) `1Fh`. Na `3Eh` je `OMCR` Z80180 — `IOREG.LIB` ho nepozná, ale
+skutočný stroj odpovedá `FFh` po zapnutí a `5Fh` po `OUT 62,1`. Firmvér naň
+nesiaha. Odmerané na skutočnej Eureke (HANDOFF 6.58).
 
 Čo dáva na horný bajt ktorá inštrukcia (UM005004, tabuľka 46):
 

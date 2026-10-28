@@ -244,7 +244,14 @@ them on the same diskette.
   motor spins up for six revolutions, the motor bit stays on 1.7 s and is
   off by 1.9 s, the index comes once a revolution, and sector 5 read at the
   index ends when it has passed under the head. Mutation-checked, each of
-  the four fails its own line;
+  the four fails its own line.  `citanie=` reads back RCR, ICR and OMCR:
+  their unused bits read as ones, as on the real machine (EUTEST13,
+  HANDOFF 6.58).  `cakacie=` times six kinds of instruction under four
+  settings of OMCR's M1E and DCNTL's MWI against a pass with both off: an
+  opcode fetch waits max(board, MWI), any other access MWI (HANDOFF 6.59).
+  Mutation-checked, five ways.  `nasobenie=` runs all 262,144 cases of the
+  Z180's MLT on the bare core and checks that the flags are left alone --
+  ZEXDOC does not know the instruction (HANDOFF 6.60);
 - `rtc` first checks that F2 announces the time: the hours, then the minutes
   once the hours have been said.  Both are spoken from the conversion buffer
   by `.spconv`, not by `.speak`, so a speech capture that loses that entry

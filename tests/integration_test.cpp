@@ -1281,52 +1281,88 @@ bool CheckZ180IoAddressHighByte() {
 // is always 0 -- but the built-in BASIC can change it, and `OUT 50,240` is
 // exactly that write (HANDOFF 6.39, 6.43).
 //
-// Charged per memory **access**, not per instruction, which is why the three
-// cases below differ: NOP fetches and nothing more, while LD A,(HL) and
-// LD (HL),A each touch memory twice.  An implementation that added the
-// penalty once per instruction would pass the first case and fail the others.
+// Charged per memory **access**, not per instruction, which is why the cases
+// below differ: NOP fetches and nothing more, while LD A,(HL) and LD (HL),A
+// each touch memory twice.  An implementation that added the penalty once per
+// instruction would pass the first case and fail the others.
+//
+// The opcode fetch has a second source, the board's wait on /M1, which OMCR's
+// M1E switches off and which overlaps MWI instead of adding to it (HANDOFF
+// 6.59): a fetch waits max(board, MWI), any other access MWI.  Each case is
+// measured against a pass with both off.  DCNTL=60h with M1E on is the case
+// the real Eureka timed; adding the two would cost one more T per fetch there.
+// The prefixed instructions are there because each prefix is an M1 of its
+// own, charged at a separate place in the core.
 bool CheckMemoryWaitStates(EurekaMachine& machine) {
   constexpr uint16_t kScratch = 0x8000;
   struct Case {
     const char* name;
-    uint8_t opcode;
-    unsigned accesses;
+    std::vector<uint8_t> code;
+    unsigned fetches;
+    unsigned others;
   };
   const std::vector<Case> cases = {
-      {"nop", 0x00, 1},
-      {"ld a,(hl)", 0x7e, 2},
-      {"ld (hl),a", 0x77, 2},
+      {"nop", {0x00}, 1, 0},
+      {"ld a,(hl)", {0x7e}, 1, 1},
+      {"ld (hl),a", {0x77}, 1, 1},
+      {"neg", {0xed, 0x44}, 2, 0},
+      {"rlc a", {0xcb, 0x07}, 2, 0},
+      // The displacement is a memory read but not an M1.
+      {"ld a,(ix+0)", {0xdd, 0x7e, 0x00}, 2, 2},
   };
+  struct Setting {
+    bool m1e;
+    unsigned mwi;
+  };
+  const std::vector<Setting> settings = {
+      {true, 0}, {true, 1}, {true, 3}, {false, 3}};
   bool ok = true;
   const uint8_t settled = machine.debug_in(hw::kDcntl);
+  // Only a register whose value changes is written, so that going from the
+  // bare pass to M1E alone has nothing but the OMCR write to recompute the
+  // wait, and going to MWI alone nothing but the DCNTL write.  Writing both
+  // every time would let either one cover for the other's missing update.
+  int lastM1e = -1;
+  int lastMwi = -1;
+  const auto run = [&](const Case& item, bool m1e, unsigned mwi) {
+    if (lastM1e != static_cast<int>(m1e))
+      machine.debug_out(hw::kOmcr, m1e ? hw::kOmcrReset : 0x00);
+    if (lastMwi != static_cast<int>(mwi))
+      machine.debug_out(
+          hw::kDcntl,
+          static_cast<uint8_t>((settled & ~hw::kDcntlMwi) |
+                               (mwi << hw::kDcntlMwiShift)));
+    lastM1e = m1e;
+    lastMwi = static_cast<int>(mwi);
+    for (std::size_t i = 0; i < item.code.size(); ++i)
+      machine.debug_poke(static_cast<uint16_t>(kScratch + i), item.code[i]);
+    machine.debug_set_pc(kScratch);
+    // HL into scratch RAM as well, so the memory operand is somewhere
+    // harmless rather than wherever HL happened to point.
+    machine.debug_set_hl(kScratch + 0x10);
+    const uint64_t before = machine.cycles();
+    machine.Step();
+    return machine.cycles() - before;
+  };
 
   for (const auto& item : cases) {
-    unsigned long long cost[2] = {0, 0};
-    for (int pass = 0; pass < 2; ++pass) {
-      // Pass 0 leaves MWI at 0, pass 1 sets it to 3 -- the F0h that BASIC
-      // writes, with IWI left where the firmware had it.
-      const uint8_t mwi = pass == 0 ? 0x00 : hw::kDcntlMwi;
-      machine.debug_out(hw::kDcntl,
-                        static_cast<uint8_t>((settled & ~hw::kDcntlMwi) | mwi));
-      machine.debug_poke(kScratch, item.opcode);
-      machine.debug_set_pc(kScratch);
-      // HL into scratch RAM as well, so the memory operand is somewhere
-      // harmless rather than wherever HL happened to point.
-      machine.debug_set_hl(kScratch + 1);
-      const uint64_t before = machine.cycles();
-      machine.Step();
-      cost[pass] = machine.cycles() - before;
-    }
-    const unsigned long long added = cost[1] - cost[0];
-    const unsigned long long want = 3ull * item.accesses;
-    if (added != want) {
-      std::cout << "  " << item.name << ": MWI=3 pridalo " << added
-                << " T namiesto " << want << " (" << cost[0] << " -> "
-                << cost[1] << ")\n";
-      ok = false;
+    const uint64_t bare = run(item, false, 0);
+    for (const auto& setting : settings) {
+      const unsigned board = setting.m1e ? 1 : 0;
+      const uint64_t want =
+          item.fetches * std::max(board, setting.mwi) +
+          item.others * setting.mwi;
+      const uint64_t added = run(item, setting.m1e, setting.mwi) - bare;
+      if (added != want) {
+        std::cout << "  " << item.name << ": M1E=" << board
+                  << " MWI=" << setting.mwi << " pridalo " << added
+                  << " T namiesto " << want << "\n";
+        ok = false;
+      }
     }
   }
 
+  machine.debug_out(hw::kOmcr, hw::kOmcrReset);
   machine.debug_out(hw::kDcntl, settled);
   return ok;
 }
@@ -1743,6 +1779,66 @@ bool CheckInterruptSampledAtEndOfInstruction(EurekaMachine& machine) {
   return ok;
 }
 
+// MLT rr, the Z180's 8 x 8 multiply: the high byte of the pair times the low
+// byte, the 16-bit product back into the pair, and no flag touched
+// (UM005004).  ZEXDOC knows only the Z80 and cannot see it, and a wrong
+// product would only ever show as a wrong number far from its cause.  So every
+// operand pair, for all four register pairs: 262 144 cases, a fraction of a
+// second.  The flags start as a pattern taken from the operands, so a core
+// that cleared them or set them would not pass by luck.  Taken over from the
+// test in Jiri Zadrazil's package (HANDOFF 6.60).
+bool CheckMultiply() {
+  static const char* const kPairs[4] = {"bc", "de", "hl", "sp"};
+  for (unsigned pair = 0; pair < 4; ++pair) {
+    for (unsigned operands = 0; operands < 0x10000; ++operands) {
+      BarePorts probe;
+      probe.code[0] = 0xed;
+      probe.code[1] = static_cast<uint8_t>(0x4c + 0x10 * pair);
+      z80 cpu;
+      z80_init(&cpu);
+      cpu.read_byte = BareRead;
+      cpu.write_byte = BareWrite;
+      cpu.port_in = BareIn;
+      cpu.port_out = BareOut;
+      cpu.userdata = &probe;
+      cpu.z180_traps = true;
+      const uint8_t high = static_cast<uint8_t>(operands >> 8);
+      const uint8_t low = static_cast<uint8_t>(operands);
+      cpu.b = cpu.d = cpu.h = high;
+      cpu.c = cpu.e = cpu.l = low;
+      cpu.sp = static_cast<uint16_t>(operands);
+      const uint8_t flags = static_cast<uint8_t>(operands * 0x9d >> 3);
+      const auto pack = [&cpu] {
+        return static_cast<uint8_t>(cpu.sf << 7 | cpu.zf << 6 | cpu.yf << 5 |
+                                    cpu.hf << 4 | cpu.xf << 3 | cpu.pf << 2 |
+                                    cpu.nf << 1 | cpu.cf);
+      };
+      cpu.sf = flags >> 7 & 1;
+      cpu.zf = flags >> 6 & 1;
+      cpu.yf = flags >> 5 & 1;
+      cpu.hf = flags >> 4 & 1;
+      cpu.xf = flags >> 3 & 1;
+      cpu.pf = flags >> 2 & 1;
+      cpu.nf = flags >> 1 & 1;
+      cpu.cf = flags & 1;
+      z80_step(&cpu);
+      const unsigned product = pair == 0   ? (cpu.b << 8 | cpu.c)
+                               : pair == 1 ? (cpu.d << 8 | cpu.e)
+                               : pair == 2 ? (cpu.h << 8 | cpu.l)
+                                           : cpu.sp;
+      if (product != unsigned(high) * low || pack() != flags ||
+          cpu.pc != 2 || cpu.trap) {
+        std::cout << "  mlt " << kPairs[pair] << " " << std::hex
+                  << unsigned(high) << "h*" << unsigned(low) << "h: " << product
+                  << "h, priznaky " << unsigned(pack()) << "h namiesto "
+                  << unsigned(flags) << "h, pc=" << cpu.pc << std::dec << "\n";
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Flags of the block-I/O instructions, from UM005004 Table 46 and its two
 // notes: (5) Z is 1 when B-1 is 0, (6) **N is the top bit of the byte
 // transferred** -- not the constant 1 this core wrote for years.  Hitachi's
@@ -1916,6 +2012,37 @@ bool CheckInternalRegistersNeedZeroHighByte(EurekaMachine& machine) {
   }
   // DCNTL drives the DMA and the I/O wait states, so it does not stay poked.
   machine.debug_out(decoded, settled);
+  return ok;
+}
+
+// The unused bits of RCR, ICR and OMCR read as ones on the real Eureka
+// (HANDOFF 6.58).  Every value here is one EUTEST13 read on the machine;
+// nothing is derived from the data sheet alone.  OMCR goes first because the
+// firmware never writes it, so what a booted machine reads is the reset value.
+bool CheckRegisterReadback(EurekaMachine& machine) {
+  bool ok = true;
+  const auto expect = [&](const char* what, uint16_t port, uint8_t want) {
+    const uint8_t got = machine.debug_in(port);
+    if (got == want) return;
+    std::cout << "  " << what << ": precitane " << std::hex
+              << static_cast<unsigned>(got) << "h namiesto "
+              << static_cast<unsigned>(want) << "h" << std::dec << "\n";
+    ok = false;
+  };
+  expect("OMCR po zapnuti", hw::kOmcr, 0xff);
+  machine.debug_out(hw::kOmcr, 0x01);
+  expect("OMCR po OUT 62,1", hw::kOmcr, 0x5f);
+  machine.debug_out(hw::kOmcr, hw::kOmcrReset);
+  expect("OMCR po OUT 62,255", hw::kOmcr, 0xff);
+
+  // 00h is what the firmware writes to both at 00018 and 0001C.
+  machine.debug_out(hw::kRcr, 0x00);
+  expect("RCR po OUT 54,0", hw::kRcr, 0x3c);
+  machine.debug_out(hw::kRcr, hw::kRcrReset);
+  expect("RCR po OUT 54,252", hw::kRcr, 0xfc);
+  machine.debug_out(hw::kRcr, 0x00);
+  machine.debug_out(hw::kIcr, 0x00);
+  expect("ICR po OUT 63,0", hw::kIcr, 0x1f);
   return ok;
 }
 
@@ -3568,8 +3695,10 @@ int wmain(int argc, wchar_t** argv) {
     const bool settles = CheckSettlesToSilence(*machine);
     const bool aliases = CheckDacDecodesWholeBlock(*machine);
     const bool internal = CheckInternalRegistersNeedZeroHighByte(*machine);
+    const bool readback = CheckRegisterReadback(*machine);
     const bool highByte = CheckZ180IoAddressHighByte();
     const bool blockFlags = CheckBlockIoFlags();
+    const bool multiply = CheckMultiply();
     const bool waits = CheckMemoryWaitStates(*machine);
     const bool refresh = CheckRefreshCycles(*machine);
     const bool sampling = CheckInterruptSampledAtEndOfInstruction(*machine);
@@ -3577,15 +3706,18 @@ int wmain(int argc, wchar_t** argv) {
     const bool line = CheckPhoneLine(*machine);
     const bool extra = CheckExtraRam(*machine);
     const bool drive = CheckDriveTiming(*machine);
-    const bool passed = settles && aliases && internal && highByte &&
-                        blockFlags && waits && refresh && sampling && mirror &&
-                        line && extra && drive;
+    const bool passed = settles && aliases && internal && readback &&
+                        highByte && blockFlags && multiply && waits &&
+                        refresh && sampling && mirror && line && extra &&
+                        drive;
     std::cout << (passed ? "PASS" : "FAIL") << " mode=DC"
               << " ticho=" << (settles ? "ok" : "chyba")
               << " porty=" << (aliases ? "ok" : "chyba")
               << " interne=" << (internal ? "ok" : "chyba")
+              << " citanie=" << (readback ? "ok" : "chyba")
               << " hornybajt=" << (highByte ? "ok" : "chyba")
               << " priznaky=" << (blockFlags ? "ok" : "chyba")
+              << " nasobenie=" << (multiply ? "ok" : "chyba")
               << " cakacie=" << (waits ? "ok" : "chyba")
               << " obnovovanie=" << (refresh ? "ok" : "chyba")
               << " vzorkovanie=" << (sampling ? "ok" : "chyba")

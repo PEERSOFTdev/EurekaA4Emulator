@@ -1,0 +1,74 @@
+EUREKA A4 EUTEST13 V1 - CONTROLLED OUT50 / OUT54 / OMCR TEST                                                                  
+ACCEPT DEC P50=56 OR 58; P54=60 P62=255 P63=31. SAME WAIT BITS; RETURN P50=SAVED ENTRY. NOT HARDWARE RESET.                   
+TIMES ARE RAW BINARY IN HEX: HOURS:MINUTES:SECONDS:HUNDREDTHS. INTERRUPTS REMAIN ENABLED.                                     
+INITIAL HEX P50=3A P54=3C P62=FF P63=1F                                                                                       
+INITIAL DEC P50=058 P54=060 P62=255 P63=031                                                                                   
+INITIAL DIFFERENCE=00; REJECT BITS 01=P50 02=P54 04=P62 08=P63; P50 DIM1 IGNORED; 00=ACCEPTED                                 
+INITIAL STATE ACCEPTED (P50=38h OR 3Ah). SAVED P50 IS RESTORED; EXACT TEST WRITES REMAIN 96/170. 11 PHASES.                   
+BEGIN P00 BASE REQUEST DEC P50=SAVED P54=60 P62=255                                                                           
+STATE P00 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TIME P00 CPU   START=09:0D:24:14 END=09:0D:29:48 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P00 READ  START=09:0D:29:48 END=09:0D:30:1C LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P00 WRITE START=09:0D:30:1C END=09:0D:37:12 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P00 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P01 50_96 REQUEST DEC P50=96 P54=60 P62=255                                                                             
+STATE P01 P50=60 P54=3C P62=FF P63=1F                                                                                         
+TIME P01 CPU   START=09:0E:0B:15 END=09:0E:10:5B LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P01 READ  START=09:0E:10:5B END=09:0E:17:63 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P01 WRITE START=09:0E:17:63 END=09:0E:1F:2A LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P01 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P02 RESTORE REQUEST DEC P50=SAVED P54=60 P62=255                                                                        
+STATE P02 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TIME P02 CPU   START=09:0E:2D:28 END=09:0E:32:5C LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P02 READ  START=09:0E:32:5C END=09:0E:39:2F LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P02 WRITE START=09:0E:39:2F END=09:0F:04:26 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P02 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P03 96_62 REQUEST DEC P50=96 P54=60 P62=1                                                                               
+STATE P03 P50=60 P54=3C P62=5F P63=1F                                                                                         
+TIME P03 CPU   START=09:0F:15:41 END=09:0F:1B:24 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P03 READ  START=09:0F:1B:24 END=09:0F:22:2C LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P03 WRITE START=09:0F:22:2C END=09:0F:29:57 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P03 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P04 RESTORE REQUEST DEC P50=SAVED P54=60 P62=255                                                                        
+STATE P04 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TIME P04 CPU   START=09:0F:38:40 END=09:10:02:10 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P04 READ  START=09:10:02:10 END=09:10:08:48 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P04 WRITE START=09:10:08:48 END=09:10:0F:3E LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P04 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P05 50_170 REQUEST DEC P50=170 P54=60 P62=255                                                                           
+STATE P05 P50=AA P54=3C P62=FF P63=1F                                                                                         
+TIME P05 CPU   START=09:10:20:29 END=09:10:27:22 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P05 READ  START=09:10:27:22 END=09:10:30:00 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P05 WRITE START=09:10:30:00 END=09:10:39:01 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P05 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P06 RESTORE REQUEST DEC P50=SAVED P54=60 P62=255                                                                        
+STATE P06 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TIME P06 CPU   START=09:11:0C:22 END=09:11:11:56 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P06 READ  START=09:11:11:56 END=09:11:18:2A LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P06 WRITE START=09:11:18:2A END=09:11:1F:20 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P06 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P07 170_62 REQUEST DEC P50=170 P54=60 P62=1                                                                             
+STATE P07 P50=AA P54=3C P62=5F P63=1F                                                                                         
+TIME P07 CPU   START=09:11:31:09 END=09:11:38:02 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P07 READ  START=09:11:38:03 END=09:12:04:45 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P07 WRITE START=09:12:04:45 END=09:12:0D:46 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P07 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P08 RESTORE REQUEST DEC P50=SAVED P54=60 P62=255                                                                        
+STATE P08 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TIME P08 CPU   START=09:12:1D:2B END=09:12:22:5F LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P08 READ  START=09:12:22:5F END=09:12:29:32 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P08 WRITE START=09:12:29:32 END=09:12:30:29 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P08 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P09 54_252 REQUEST DEC P50=SAVED P54=252 P62=255                                                                        
+STATE P09 P50=3A P54=FC P62=FF P63=1F                                                                                         
+TIME P09 CPU   START=09:13:07:27 END=09:13:0F:20 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P09 READ  START=09:13:0F:20 END=09:13:18:49 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P09 WRITE START=09:13:18:49 END=09:13:22:3F LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P09 P50=3A P54=3C P62=FF P63=1F                                                                                         
+BEGIN P10 RESTORE REQUEST DEC P50=SAVED P54=60 P62=255                                                                        
+STATE P10 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TIME P10 CPU   START=09:13:32:5F END=09:13:38:2F LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P10 READ  START=09:13:38:2F END=09:14:03:03 LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+TIME P10 WRITE START=09:14:03:03 END=09:14:09:5D LOOP=16x65536 HEX-BINARY HH:MM:SS:CS                                         
+RESTO P10 P50=3A P54=3C P62=FF P63=1F                                                                                         
+TEST COMPLETE EUTEST13 V1 - ALL PHASES SAVED; FINAL BASELINE VERIFIED.                                                        

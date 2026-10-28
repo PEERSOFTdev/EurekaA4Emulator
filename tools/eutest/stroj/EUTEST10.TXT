@@ -1,0 +1,16 @@
+EUREKA A4 EUTEST10 - BEFORE / AFTER OUT 62,1 / RESTORE OUT 62,255
+                                                             BEFORE: P50=38 P54=3C P62=FF P63=1F
+                                                                                           MLT BC=003F MLT DE=008F EXPECT 003F/008F
+                                                                                      CPU   START=38:2D END=01:61; LOOP=16x65536; BINARY SS:HH
+                                                                      READ  START=06:1F END=0C:57; LOOP=16x65536; BINARY SS:HH
+                                                                      WRITE START=11:15 END=18:0B; LOOP=16x65536; BINARY SS:HH
+                                                                      AFTER : P50=38 P54=3C P62=5F P63=1F
+                                                                                           CPU   START=1E:19 END=22:49; LOOP=16x65536; BINARY SS:HH
+                                                                      READ  START=26:61 END=2C:31; LOOP=16x65536; BINARY SS:HH
+                                                                      WRITE START=30:5D END=36:4F; LOOP=16x65536; BINARY SS:HH
+                                                                      RESTOR: P50=38 P54=3C P62=FF P63=1F
+                                                                                           CPU   START=01:16 END=06:4A; LOOP=16x65536; BINARY SS:HH
+                                                                      READ  START=0B:1C END=11:54; LOOP=16x65536; BINARY SS:HH
+                                                                      WRITE START=16:26 END=1D:1C; LOOP=16x65536; BINARY SS:HH
+                                                                      TEST COMPLETE
+                                                                                                                 

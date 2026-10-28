@@ -1084,6 +1084,10 @@ Dve veci odtiaľ, ktoré platia ďalej a inde sa nedozvedia:
   inštrukcií ju nehýbe: pri zásahu, ktorý stlačil tempo hudby o 3,9 %,
   sa dĺžka štartovej hlášky zmenila o 0,03 %. Kto siahne na cykly,
   meria oboje zvlášť.
+- **Odkiaľ je ten jeden T-stav na M1, už vieme aspoň po funkcii
+  (25. 10. 2026, 6.59):** doska ho pridáva na `/M1` a bit M1E v `OMCR`
+  ho vypína — `OUT 62,1` je presne to. Pri predvolenom stave sa nezmenilo
+  nič, tempo znelky zostalo 97 850 / 37 343.
 
 ### 6.11 Funkčné klávesy hladujú: emulátor odreže ROM od jej vlastnej fronty
 
@@ -3247,6 +3251,12 @@ znelky, `seq 20000000 kC6 spin:2000000`: so zavedeným účtovaním
 účtovaním **97 850 na 37 343** — do posledného obehu to isté. Firmvér drží
 MWI na nule, takže sa pripočítava nula.
 
+**Toto už celkom neplatí (25. 10. 2026, 6.59).** Na cykle M1 sa MWI so
+čakaním dosky neskladá, ale prekrýva: načítanie operačného kódu čaká
+max(doska, MWI), nie súčet. Skutočná Eureka to vyvrátila o 18 % (6.59).
+Test nižšie sa preto prepísal a „3, 6 a 6“ už nedrží — pri MWI = 3 je to
+2, 5 a 5 nad predvoleným stavom.
+
 Drží to `CheckMemoryWaitStates` v režime `dc`: `NOP`, `LD A,(HL)` a
 `LD (HL),A` v RAM, každá raz s MWI = 0 a raz s MWI = 3, a rozdiel musí byť
 tri T-stavy **na pamäťový prístup** — teda 3, 6 a 6. Tri rôzne počty prístupov
@@ -3349,6 +3359,11 @@ a že časovač beží ďalej aj pri uvoľnenej zbernici. Rozhodnúť to vie
 meranie na skutočnom stroji: tá istá melódia alebo slučka v BASICu s
 `OUT 54,252` a bez neho — pomer dĺžok 1,43 znamená model, 1,30 druhé čítanie.
 
+**Rozhodnuté meraním (25. 10. 2026, 6.60): model platí.** EUTEST13 na
+skutočnej Eureke odmeral tie isté tri slučky bez obnovovania a s
+`OUT 54,252`: 5,52 → 7,93 s, 6,56 → 9,41 s a 6,90 → 9,90 s, pomer 1,437,
+1,434 a 1,435. Druhé čítanie by dalo 1,30.
+
 Obnovovanie sa pripočítava po inštrukciách, nie po strojových cykloch, a
 nerozlišuje SLEEP; celkový čas to nemení, len posúva takty v rámci
 inštrukcie. Pri vypnutom `REFE` (firmvér) je to nulový zásah — všetkých
@@ -3362,6 +3377,14 @@ Overené dvoma mutáciami — interval rátaný len z taktov programu zhodí `FC
 **Otvorené:** `OUT 62,1`. Port `3Eh` v `IOREG.LIB` nie je a na HD64180 tam
 register nie je; na Z80180 je tam `OMCR`, ktorý o rýchlosti nerozhoduje.
 Veta „tá šestka zrýchľuje“ nie je jasná — treba sa spýtať.
+
+**Polovica rozhodnutá (25. 10. 2026, 6.58):** register na `3Eh` skutočná
+Eureka má — po `OUT 62,1` číta `5Fh`, po zapnutí `FFh` — a emulátor ho odvtedy
+drží aj číta. Či a ako mení rýchlosť, je otvorené ďalej v 6.58.
+
+**Rozhodnuté celé (25. 10. 2026, 6.59):** šestka zrýchľuje — `OUT 62,1`
+zhodí M1E a s ním čakací stav dosky na každom načítaní operačného kódu.
+Skutočná Eureka: slučka EUTEST10 4,48 s namiesto 5,52 s.
 
 ### 6.46 CHESS.COM — rýchlosť emulátora proti spomienke na skutočný stroj
 
@@ -4972,6 +4995,195 @@ Mimo repozitára ležia skript majiteľa na meranie klávesnice
 (`C:\b\akordy-test.ps1`) a dočasná sonda s tokenmi `h:`, `r:`, `run:`
 a `runw:` (`C:\b\ea4-atx`).
 
+### 6.58 Nepoužité bity RCR, ICR a OMCR sa čítajú ako jednotky
+
+**Odkiaľ to je.** Balík opráv od Jiřího Zadražila (23. 10. 2026, mimo
+repozitára), postavený nad `v2026.10.3`. Jeho súčasťou je `EUTEST13.TXT`,
+výpis testovacieho programu spusteného na **skutočnej** Eureke kamaráda,
+ktorý pred meraním aj po každej etape vypíše porty 50, 54, 62 a 63. ROM je
+tá istá ako naša (SHA-256 `bde51032…` = MD5 `9aa101ab…`).
+
+**Čo stroj prečítal** a čo emulátor čítal dovtedy:
+
+- port 54 (RCR) po štarte, keď doň firmvér na `00018` zapísal `00h`:
+  `3Ch`; emulátor `00h`. Po `OUT 54,252`: `FCh`.
+- port 63 (ICR) po štarte, firmvér zapísal `00h` na `0001C`: `1Fh`;
+  emulátor `00h`.
+- port 62 (`3Eh`) po zapnutí: `FFh`, po `OUT 62,1`: `5Fh`, po `OUT 62,255`
+  zase `FFh`; emulátor `00h`, lebo tam register nemal.
+
+Všetko sedí so Zilogom (UM005004): v RCR sú nepoužité bity 5–2, v ICR 4–0,
+a na `3Eh` má Z80180 `OMCR` s M1E v bite 7, M1TE v bite 6 (len zápis), IOC
+v bite 5 a nepoužitými bitmi 4–0. Čítanie teda vráti bity 7 a 5 a inde
+jednotky — pre `01h` presne `5Fh`. Firmvér na `3Eh` nesiaha (v ROM nie je
+`OUT0 (3Eh)` ani `IN0 A,(3Eh)`), takže po štarte zostáva hodnota z resetu.
+
+**Čo sa zmenilo.** `ReadPortInner` k uloženej hodnote priORuje
+`hw::kRcrReadOnes`, `hw::kIcrReadOnes` a `hw::kOmcrReadOnes`; `PowerOn`
+nastaví `io_[hw::kOmcr]` na `FFh`. Zápis sa nemení — do `io_` ide tak, ako
+prišiel, a model obnovovania sa pýta práve jeho, nie čítanej hodnoty.
+
+Vedľajší účinok, ktorý stojí za zapísanie: `CheckRefreshCycles` si RCR
+odkladá cez `debug_in` a na konci ho zapíše späť, teraz teda `3Ch` namiesto
+`00h`. Je to neškodné (REFE zostáva nula) a robí to aj skutočný stroj, keď
+BASIC napíše `OUT 54,INP(54)`.
+
+Drží to `CheckRegisterReadback` v režime `dc` (`citanie=`) a berie len
+hodnoty, ktoré stroj naozaj prečítal, nič odvodené len z manuálu. OMCR ide
+prvý, aby čítal hodnotu z resetu. Overené mutáciou: čítanie bez
+priORovania zhodí OMCR, RCR aj ICR, chýbajúci reset `FFh` zhodí „OMCR po
+zapnutí“.
+
+**Otvorené:** čo `OMCR` robí s časovaním. Ten istý balík tvrdí, že
+`OUT 62,1` stroj zrýchli (vypne čakací stav na M1), a dokladá to časmi
+z EUTEST10/13. To je samostatná zmena modelu jadra a posudzuje sa zvlášť.
+
+**Uzavreté v 6.59.**
+
+### 6.59 Čakanie na M1: OMCR ho vypína a s MWI sa prekrýva
+
+**Odkiaľ to je.** Ten istý balík Jiřího Zadražila ako 6.58: výpisy
+EUTEST10 a EUTEST13 zo skutočnej Eureky, ktoré merajú tri slučky po
+1 048 576 obehoch hodinami stroja. Jeho úprava jadra sa nepreberala
+doslova; model je ten istý, kód a test sú prepísané po našom.
+
+**Slučky** (generátor `build_eutest13.py` v balíku):
+
+- CPU: `NOP`, `NOP`, `DEC BC`, `LD A,B`, `OR C`, `JR NZ` — šesť M1 a jedno
+  čítanie posunu, 26 T podľa tabuliek Z180, s čakaním dosky 32 T.
+- READ: dva `NOP` vymenené za `LD A,(HL)` — 32 T, s doskou 38 T.
+- WRITE: za `LD (HL),A` — 34 T, s doskou 40 T.
+
+Na stroji 32,3 T pri 5,52 s pre CPU, rozdiel sú prerušenia. Ten istý
+pomer stačí na predpoveď každého ďalšieho merania z hlavy, bez emulátora.
+
+**Čo stroj nameral proti dvom modelom** (súčet je to, čo emulátor robil
+od 6.43, maximum je to, čo robí teraz):
+
+- `OUT 62,1`, MWI 0 (EUTEST10): CPU 4,48 s, READ 5,52 s, WRITE 5,86 s.
+  Maximum dáva 26/32/34 T, teda 4,49, 5,52 a 5,87 s. Súčet ani starý
+  model OMCR nepoznali, dávali 5,52, 6,56 a 6,90 s.
+- DCNTL 60h (MWI 1), M1E zapnutý (EUTEST13 P01): CPU 5,70 s, READ 7,08 s.
+  Maximum 33 a 41 T, teda 5,69 a 7,07 s. Súčet 39 a 47 T, teda 6,73
+  a 8,11 s.
+- DCNTL 60h a k tomu `OUT 62,1` (P03): CPU 5,71 s — rovnako ako bez OMCR,
+  lebo max(0, 1) = max(1, 1). Súčet by tu rozlíšiť nevedel, maximum to
+  predpovedá.
+- DCNTL AAh (MWI 2, P05): CPU 6,93 s, maximum 40 T, teda 6,90 s; súčet
+  46 T, teda 7,94 s.
+
+Dvanásť čísel zo stroja sedí na najviac 0,03 s, súčet minie o 18 %.
+
+**Prečo by to tak mohlo byť** — je to výklad, nie meranie: M1E rozhoduje,
+či procesor pri načítaní kódu vôbec vysiela `/M1`. Generátor čakacieho
+stavu na doske spúšťaný `/M1` je v návrhoch so Z80 bežný, a keď `/M1` nepríde,
+nečaká sa. Prekrytie s MWI zodpovedá tomu, že vnútorné aj vonkajšie čakanie
+predlžuje ten istý cyklus a vyhráva dlhšie (UM005004, kapitola o čakacích
+stavoch). Schému dosky nemáme.
+
+**Čo sa zmenilo.** `m1_wait` v `z80.c` už nie je konštanta, ale pole
+jadra `z->m1_wait`; `z80_init` ho nastaví na 1, takže samotné jadro
+(`zex_test`) sa správa ako predtým. `EurekaMachine::UpdateM1Wait` doň
+zapíše max(doska, MWI) − MWI — MWI pri načítaní kódu účtuje `rb()` už samo
+— a volá sa po `z80_init` a pri každom zápise do `OMCR` aj `DCNTL`.
+Doska je `hw::kBoardM1Wait`, bit `hw::kOmcrM1e`. Snímka RAM stav CPU
+neukladá, takže `pamat.bin` sa to netýka.
+
+**Pri predvolenom stave sa nezmenilo nič**: M1E zapnutý a MWI 0 dávajú
+1 T na M1 ako doteraz. Tempo znelky (`seq 20000000 kC6 spin:2000000`)
+97 850 na 37 343, do obehu to isté ako v 6.43. `zex_test` `errors=0`.
+
+**Čo pocíti používateľ.** Iba program, ktorý sám zapíše do `OMCR` alebo
+nastaví MWI: `OUT 62,1` zrýchli stroj asi o pätinu, `OUT 50,96` a
+`OUT 50,170` spomalia menej než doteraz.
+
+Drží to `CheckMemoryWaitStates` v režime `dc`, prepísaný: šesť inštrukcií
+(aj s prefixmi `ED`, `CB` a `DD`, každý je samostatné M1 účtované na inom
+mieste jadra) v štyroch nastaveniach M1E a MWI, každé proti prechodu
+s oboma vypnutými. Zapisuje len register, ktorý sa medzi prechodmi mení,
+inak by zápis jedného prekryl chýbajúci prepočet pri druhom — presne tak
+prvá verzia testu prepustila mutáciu. Overené piatimi mutáciami: súčet
+namiesto maxima, ignorovaný M1E, prefix `ED` s pevnou jednotkou, chýbajúci
+prepočet po `OMCR` a chýbajúci prepočet po `DCNTL` — každá test zhodí.
+
+**Čo zostáva neisté:** M1TE a IOC sa nemodelujú (nikto ich neočakáva) a
+nerozlišuje sa, či `/M1` pri potvrdení prerušenia čaká inak. Rozšírená RAM
+na 40000h sa v tých meraniach nepoužila.
+
+### 6.60 Čo ešte vydal balík Jiřího Zadražila
+
+Okrem opráv v 6.58 a 6.59 je v balíku (23. 10. 2026, mimo repozitára)
+materiál, ktorý stojí sám za seba. Tu je to, čo sa z neho prevzalo alebo
+overilo; celý balík sa nikam nedistribuuje.
+
+**Testovacie programy a výpisy zo stroja sú v `tools/eutest/`** (popis
+v `tools/README.md`). Generátory dajú bajtovo tie isté COM, aké bežali na
+skutočnej Eureke (SHA-256 sedí s tým, čo balík uvádza), a oba výpisy sú
+pôvodné súbory zo stroja; EUTEST13 má SHA-256 `45c7efa5…`, rovnaký, aký
+uvádza Jiřího porovnávací protokol. Bez nich by sa 6.58 a 6.59 nedali
+zopakovať.
+
+**Oba programy dobehnú v emulátore** (25. 10. 2026, sonda, vetva s 6.59):
+EUTEST10 aj EUTEST13 skončia `TEST COMPLETE` so skratkou BIOS-u aj bez nej
+a všetky prečítané registre sa zhodujú so strojom (P54 `3Ch`/`FCh`, P62
+`FFh`/`5Fh`, P63 `1Fh`). Kontrola MLT v EUTEST10 prejde. Časy zo sondy
+neznamenajú nič — hodiny stroja idú podľa hostiteľa a sonda beží bez brzdy.
+
+**DCNTL po načítaní programu: `3Ah` na stroji aj bez skratky, `38h` so
+skratkou.** Ovládač diskety z ROM nechá v DCNTL bit DIM1 (smer DMA 1,
+I/O → pamäť) z posledného čítania. EUTEST13 ho na stroji prečítal ako
+`3Ah`; v emulátore bez skratky BIOS-u (`EA4_BEZ_SKRATKY`) tiež `3Ah`,
+so skratkou `38h`, lebo skratka na DMA nesiaha. Čakacie bity sú v oboch
+rovnaké, takže na rýchlosť to vplyv nemá. EUTEST10 na stroji číta `38h` —
+meria po zápise súboru, keď smer ostal opačný. Je to vlastnosť skratky,
+nie chyba; kto by porovnával DCNTL so strojom, nech púšťa bez nej.
+
+**Obnovovanie pamäte je potvrdené** — pozri dodatok v 6.45.
+
+**BDOS funkcia 105 v ROM nie je.** Rozdeľovač na `1B025h` má
+`LD A,C / CP 2Eh / RET NC` (overené v dumpe), takže každú funkciu od 46
+vyššie odmietne bez slova a nič nevykoná. Čo presne volajúci dostane späť,
+sa nerozoberalo; Jiří hlási nuly a nedotknutý buffer, aj zo stroja. Program
+pre CP/M 3, ktorý si o čas pýta funkciu 105, ho teda nedostane ani na stroji.
+
+Inou cestou sa k nej tiež nedá prísť. Vstup BDOS je `JP C011h` na `C006h`
+(vektor na `0005h` nastavuje `196FD`); kód na `C011h` firmvér pri štarte
+skopíruje z `1930Fh` (`18099`: `LDIR` 256 bajtov na `C000h`). Ten si odloží
+registre, prepne zásobník, namapuje banku BDOS (CBR `0Eh`, CBAR `D0h`, preto
+je logické `D025h` fyzické `1B025h`) a skočí na `D000h`, odkiaľ vedie len cez
+rozdeľovač vyššie. `CP 69h` v celej ROM nie je.
+
+**Manuál si tu protirečí sám.** `BDOS.8` (súbor vo formáte WordStar, text
+treba čítať s orezaným ôsmym bitom) funkciu 105 `bdos_gettime` v tabuľke aj
+opisuje: dátum ako počet dní od 1. 1. 1978, hodiny a minúty v BCD, sekundy
+v A. Ale knižnice z tej istej diskety, ktoré si vývojár naozaj vkladal,
+`A4DOS.LIB` aj `CPM.LIB`, končia na 45 (`bdos_set_error_mode`) a
+`bdos_gettime` nepoznajú. ROM sa zhoduje s knižnicami, nie s textom
+kapitoly; funkcia 105 bola asi plánovaná alebo z inej verzie firmvéru.
+Pôvodná cesta Eureky k času je zariadenie **`dev_rtc`** (`DEVICES.10`),
+ktoré prečíta osem registrov hodín do `TIME_BUF`; EUTEST čítajú porty
+`90h`–`93h` priamo.
+
+**Úplný test MLT** (`CheckMultiply` v režime `dc`, `nasobenie=`): všetky
+dvojice operandov pre BC, DE, HL a SP, 262 144 prípadov, súčin aj to, že
+príznaky zostanú. ZEXDOC MLT nepozná, je len pre Z80. Prevzaté z testu
+v balíku. Overené mutáciou: zlý súčin pre SP aj nastavovaný príznak Z ho
+zhodia.
+
+**Vedľajší nález: token `mount:` v sonde disketu nezapíše.** Pri behu
+EUTEST sa ukázalo, že `mount:` vymení disketu bez `settleForSwap`, takže
+čo program zapísal, sa do priečinka nedostane — hoci `CLAUDE.md` píše, že
+všetky tokeny výmeny čakajú a zapisujú. `ram` a `folder` to robia správne.
+Neopravené, je to mimo tejto zmeny (`ea4-dn6`).
+
+**Čo sa neprevzalo:** kópia našich testov klávesnice, testy jadra, ktoré
+už kryje režim `dc`, voliteľná diagnostika zvuku (sonda má `wav:`),
+spúšťacie skripty balíka a úprava `localtime_r` pre jeho linuxový
+harness. Braillovské zmeny a zvuková latencia sa posudzujú samostatne.
+Hlásené chyby z balíka sú v beadoch: štvoršípkový vypínací akord na Jiřího
+Windows (`ea4-46b`), oneskorenie braillu (`ea4-sk1`), hlásenie Defendera na
+staršej zostave (`ea4-jsz`).
+
 ## 7. Nástroje
 
 V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
@@ -4988,6 +5200,7 @@ V `tools/`, čistý Python 3, bez závislostí. ROM sa berie z `$A4ROM`.
 | `melodies.py` | vyrenderuje melódie z ROM do `audio/melodie/` |
 | `check_io_names.py` | overí `src/eureka_io.h` proti `IOPORT.LIB`, `IOREG.LIB`, `SYSEQU.LIB` a `KB.H` |
 | `drive_steps.py IN OUT T0 T1 KROK…` | vystrihne kroky hlavičky z nahrávky mechaniky a odčíta z nich šum točenia (6.54) |
+| `eutest/` | generátory EUTEST10/13 od Jiřího Zadražila, ich výpisy zo skutočnej Eureky a porovnanie výpisov (6.60) |
 
 Príklad:
 
