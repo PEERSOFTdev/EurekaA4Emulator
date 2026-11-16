@@ -109,6 +109,8 @@ class DriveSound {
   // be shuffled.
   void StartRun(std::size_t turn);
   uint32_t Shuffle();
+  // How far motorVoice_ is faded in, by a switch and by a seam.
+  float MotorGain() const;
 
   std::deque<Job> jobs_;
   uint64_t queued_ = 0;  // samples of work in jobs_, to bound the backlog
@@ -143,9 +145,16 @@ class DriveSound {
   std::vector<std::vector<float>> steps_;
   std::size_t stepTake_ = 0;
   Motor motor_ = Motor::kOff;
-  Voice motorVoice_, motorOut_;
+  // motorOut_ fades out on a switch of the motor (start, stop, back to the
+  // steady motor), seamOut_ at a seam between two runs.  Apart, so that a
+  // switch in the middle of a seam does not cut the voice the seam is
+  // fading out; motorOut_.gain is where motorVoice_ stood when it left.
+  Voice motorVoice_, motorOut_, seamOut_;
   std::size_t motorFade_ = 0;
-  std::size_t motorFadeLength_ = 1;
+  std::size_t seamFade_ = 0;
+  // Samples left of motorVoice_'s own fade in at a seam; zero once a switch
+  // has replaced the voice that came in, while seamOut_ still fades.
+  std::size_t seamIn_ = 0;
   // Revolution boundaries in motorLoop_, as sample indices, up to the last
   // one a seam can still be crossfaded from; empty when the loop just loops.
   std::vector<std::size_t> turns_;

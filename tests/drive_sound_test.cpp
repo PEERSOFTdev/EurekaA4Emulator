@@ -277,6 +277,48 @@ void ShufflesTheMotor() {
   Check(Run(again, events, 30.0) == out, "nahodne behy su pri rovnakych udalostiach rovnake");
 }
 
+// The motor stopping in the middle of a seam must not cut the run the seam
+// is fading out, nor jump the one fading in to full strength (review of
+// 16. 11. 2026).  With the whole motor at one level and the stop silent,
+// every fade is a smooth slope and any cut is a step of hundreds; the stop
+// is moved 10 ms at a time across a second and a half, so some of the stops
+// land in a seam.
+void StopsCleanlyMidSeam() {
+  constexpr int16_t kLevel = 8000;
+  const auto set = [](const std::string& stem, std::vector<uint8_t>& bytes) {
+    if (stem == "motor-rozbeh") bytes = Wav(0.1, kLevel);
+    else if (stem == "motor-slucka") bytes = Wav(30 * 0.198, kLevel);
+    else if (stem == "motor-dobeh") bytes = Wav(0.1, 0);
+    else if (stem == "presun") bytes = Wav(0.5, 0);
+    else if (stem == "krok-1") bytes = Wav(0.05, 0);
+    else return false;
+    return true;
+  };
+  int worst = 0;
+  double worstAt = 0;
+  std::size_t worstSample = 0;
+  for (int i = 0; i < 150; ++i) {
+    const double second = 1.3 + 0.01 * i;
+    DriveSound drive;
+    std::string error;
+    drive.LoadSamples(set, error);
+    const auto out = Run(drive, {Seek(0, 1, 0.0), Seek(1, 0, second)}, second + 2.5);
+    // From the second sample: the motor switched on from silence starts at
+    // once, the spin-up's own fade in is in its recording.
+    for (std::size_t s = 2; s < out.size(); ++s) {
+      const int jump = std::abs(out[s] - out[s - 1]);
+      if (jump > worst) {
+        worst = jump;
+        worstAt = second;
+        worstSample = s;
+      }
+    }
+  }
+  Check(worst < 100, "zastavenie uprostred svu necvakne",
+        "skok " + std::to_string(worst) + " pri druhom kroku v " + std::to_string(worstAt) + " s, vzorka " +
+            std::to_string(worstSample));
+}
+
 // Switched off, the machine gives no samples; Continue has to let the drive
 // finish on its own, or the motor would hum on into the next power-up.
 void FinishesWithoutTheMachine() {
@@ -312,6 +354,7 @@ int main() {
   PlaysInRealTime();
   RakesAcrossCylinders();
   ShufflesTheMotor();
+  StopsCleanlyMidSeam();
   FinishesWithoutTheMachine();
   SameEventsSameSound();
   std::cout << (failures == 0 ? "PASS" : "FAIL") << " mode=DRIVE kontrol=" << checks

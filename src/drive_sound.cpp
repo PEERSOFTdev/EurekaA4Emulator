@@ -106,6 +106,15 @@ constexpr std::size_t kMaxRun = 15;
 constexpr std::size_t kNearRun = 3;
 constexpr uint32_t kSeamFade = Ms(50);
 
+// Equal-power crossfade, `left` samples before its end: two stretches of
+// motor are not in phase sample by sample, so a linear one would dip.
+float FadeIn(std::size_t left, std::size_t length) {
+  return static_cast<float>(std::sin((1.0 - static_cast<double>(left) / length) * kPi / 2));
+}
+float FadeOut(std::size_t left, std::size_t length) {
+  return static_cast<float>(std::cos((1.0 - static_cast<double>(left) / length) * kPi / 2));
+}
+
 // Revolution boundaries of a steady motor recording.  The pattern of one
 // revolution recurs about 200 ms later -- 196 to 199 ms in the Eureka's, and
 // not the same each time, so no fixed period would stay in phase -- and each
@@ -325,7 +334,7 @@ void DriveSound::Tick(int16_t& sample) {
 bool DriveSound::Idle() const {
   if (sampled_)
     return jobs_.empty() && !running_ && !motorOn_ && motor_ == Motor::kOff && motorFade_ == 0 &&
-           heads_.empty();
+           seamFade_ == 0 && heads_.empty();
   return jobs_.empty() && !running_ && !motorOn_ && speed_ < 1e-3f && clicks_.empty();
 }
 
@@ -351,9 +360,12 @@ void DriveSound::StartStep(const Job& job) {
 }
 
 void DriveSound::SwitchMotor(Motor to) {
+  // The leaving voice fades from where it stands -- mid-seam it is only
+  // part way in -- and a seam in progress fades out on its own.
   motorOut_ = motorVoice_;
+  motorOut_.gain = MotorGain();
   motorFade_ = motor_ == Motor::kOff ? 0 : kCrossfade;
-  motorFadeLength_ = kCrossfade;
+  seamIn_ = 0;
   motor_ = to;
   motorVoice_ = Voice{};
   switch (to) {
@@ -372,6 +384,13 @@ uint32_t DriveSound::Shuffle() {
   shuffleSeed_ ^= shuffleSeed_ >> 17;
   shuffleSeed_ ^= shuffleSeed_ << 5;
   return shuffleSeed_;
+}
+
+float DriveSound::MotorGain() const {
+  float gain = 1.0f;
+  if (motorFade_ > 0) gain *= FadeIn(motorFade_, kCrossfade);
+  if (seamIn_ > 0) gain *= FadeIn(seamIn_, kSeamFade);
+  return gain;
 }
 
 void DriveSound::StartRun(std::size_t turn) {
@@ -405,17 +424,13 @@ float DriveSound::RenderSampled() {
   // the cut cannot click.  The crossfade keeps the power, not the amplitude:
   // two stretches of motor are not in phase sample by sample, and a linear
   // one would dip in the middle of every seam.
-  const auto fadeIn = [this] {
-    const double t = 1.0 - static_cast<double>(motorFade_) / motorFadeLength_;
-    return static_cast<float>(std::sin(t * kPi / 2));
-  };
   float value = 0.0f;
-  if (motor_ == Motor::kLoop && !turns_.empty() && motorFade_ == 0 &&
+  if (motor_ == Motor::kLoop && !turns_.empty() && motorFade_ == 0 && seamFade_ == 0 &&
       motorVoice_.position >= turns_[runEnd_]) {
     // The run is over: the next starts anywhere but close to where this one
     // ended, and this one plays on under the crossfade.
-    motorOut_ = motorVoice_;
-    motorFade_ = motorFadeLength_ = kSeamFade;
+    seamOut_ = motorVoice_;
+    seamFade_ = seamIn_ = kSeamFade;
     const std::size_t ended = runEnd_;
     const std::size_t last = turns_.size() - 1;
     std::size_t next = Shuffle() % (last - kMinRun + 1);
@@ -426,19 +441,27 @@ float DriveSound::RenderSampled() {
   }
   if (motor_ != Motor::kOff) {
     if (Advance(motorVoice_.sound, motorVoice_.position, motorVoice_.loop, value)) {
-      out += (motorFade_ > 0 ? fadeIn() : 1.0f) * value;
+      out += MotorGain() * value;
     } else if (motor_ == Motor::kStart) {
+      // Straight on in this very sample: one left silent is a click.
       motor_ = Motor::kLoop;
       StartRun(0);
+      if (Advance(motorVoice_.sound, motorVoice_.position, motorVoice_.loop, value))
+        out += MotorGain() * value;
     } else {
       motor_ = Motor::kOff;
     }
   }
+  if (seamIn_ > 0) --seamIn_;
   if (motorFade_ > 0) {
-    const double t = 1.0 - static_cast<double>(motorFade_) / motorFadeLength_;
     if (Advance(motorOut_.sound, motorOut_.position, motorOut_.loop, value))
-      out += static_cast<float>(std::cos(t * kPi / 2)) * value;
+      out += motorOut_.gain * FadeOut(motorFade_, kCrossfade) * value;
     --motorFade_;
+  }
+  if (seamFade_ > 0) {
+    if (Advance(seamOut_.sound, seamOut_.position, seamOut_.loop, value))
+      out += FadeOut(seamFade_, kSeamFade) * value;
+    --seamFade_;
   }
 
   for (Voice& head : heads_) {

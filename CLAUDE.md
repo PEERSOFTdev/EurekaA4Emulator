@@ -527,7 +527,10 @@ HANDOFF 6.54) cez `kLoopAndStep`. Drží aj **motor, ktorý sa neopakuje**
 (`ShufflesTheMotor`, od 16. 11. 2026): dlhý ustálený motor sa hrá po
 náhodných behoch 5 až 15 celých otáčok, nie dookola, a každý šov sedí na
 hranici otáčky — na umelej slučke s pulzom a vlastnou úrovňou v každej
-otáčke. Overené mutáciou: obyčajná slučka a šov pol otáčky vedľa. Drží aj **skutočný čas** (`SetRealTime`, verná mechanika,
+otáčke. Overené mutáciou: obyčajná slučka a šov pol otáčky vedľa. Drží aj to, že **zastavenie uprostred šva
+necvakne** (`StopsCleanlyMidSeam`): šov aj prepnutie motora majú každý
+vlastný odchádzajúci hlas. Overené mutáciou: šov odrezaný pri prepnutí,
+odchádzajúci hlas z plnej sily a tichá vzorka po rozbehu. Drží aj **skutočný čas** (`SetRealTime`, verná mechanika,
 `PlaysInRealTime`): mechanika mlčí do prvej udalosti, krok zaznie hneď —
 bez vlastného roztáčania a aj pod rečou, lebo to už odčakal radič a firmvér
 — a motor zastane 1,8 s po poslednej udalosti. Overené mutáciou: čakanie na

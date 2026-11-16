@@ -4749,6 +4749,23 @@ diskety cez vernú mechaniku (sonda, `wavm:`, `EA4_BEZ_SKRATKY`, 93 s, rms
 ustáleného motora 205–209 v 5 s oknách) pán Krejča posúdil 16. 11. 2026
 ako „oproti originálnej Eureke naprosto bez chyb“.
 
+**Review pred PR (16. 11. 2026) našlo dve cvaknutia.** Šov a prepnutie
+motora (zastavenie, rozbeh, návrat do ustáleného) zdieľali jeden
+odchádzajúci hlas, takže zastavenie uprostred 50 ms šva úsek, ktorý šov
+stlmoval, odrezalo naraz — asi raz za 20 až 40 zastavení. Šov má teraz
+vlastný hlas (`seamOut_`, `seamFade_`) a hlas, ktorý pri prepnutí
+odchádza, slabne z hlasitosti, na ktorej bol (`motorOut_.gain`,
+`MotorGain`). Druhé, staršie: vo vzorke, kde skončil rozbeh, motor
+nezahral nič, a jedna tichá vzorka uprostred motora je cvaknutie; ustálený
+motor teraz nastúpi v tej istej vzorke. Drží to `StopsCleanlyMidSeam`:
+celý motor na jednej úrovni a tichý dobeh, takže každé prelínanie je
+plynulý svah, a zastavenie posúvané po 10 ms cez 1,5 s; najväčší skok
+medzi vzorkami musí byť pod 100. Overené mutáciou: vynulovaný šov pri
+prepnutí (skok 1964), odchádzajúci hlas z plnej sily (1627) a chýbajúca
+vzorka po rozbehu (1999). Hranica, od ktorej sa motor skladá, je asi 4,2 s
+(20 hraníc otáčok plus 0,4 s na poslednú); `NAVOD.md` tvrdil 4,5 s,
+opravené na „asi 4 s, s istotou od 4,5 s“.
+
 #### Otvorené
 
 - **Motor.** `pol_disk` (`A0h` bit 0, `IOPORT.LIB`: „high to power up fdc

@@ -50,7 +50,7 @@ mechanika naozaj niečo robí. Časy nižšie sú časy skutočnej mechaniky Eur
     predpokladá pritom **300 otáčok za minútu**, ako má Eureka a každá
     3,5" mechanika. Konce nahrávky na seba nadväzovať nemusia. Čím je
     dlhšia, tým viac úsekov má z čoho vyberať; vzor má 8,7 s.
-  - **kratšia** — hrá sa **dookola** celá, takže koniec musí plynulo
+  - **kratšia než asi 4 s** — hrá sa **dookola** celá, takže koniec musí plynulo
     nadväzovať na začiatok, bez cvaknutia a bez zmeny hlasitosti. Krátku
     slučku počuť opakovať sa: 0,75 s aj 8,7 s dokola rozpoznal hudobník
     bez zaváhania.
@@ -113,8 +113,8 @@ Eureky:
 **Staršie sady fungujú ďalej.** Sada s krátkou slučkou, napríklad
 predchádzajúca sada z cudzích mechaník s 3 s slučkou, sa hrá ako predtým,
 dookola. Náhodné úseky sa zapnú samy, len keď je ustálený motor dlhý
-aspoň 4,5 s; jeho súbor stačí nahradiť dlhším a nič iné sa meniť
-nemusí.
+aspoň asi 4 s (s istotou od 4,5 s); jeho súbor stačí nahradiť dlhším
+a nič iné sa meniť nemusí.
 
 Mechanika **mlčí, kým Eureka hovorí**, tak ako na skutočnom stroji: firmvér
 počas reči na disketu nesiaha, motor len dobieha.
