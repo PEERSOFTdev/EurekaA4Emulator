@@ -92,9 +92,62 @@ constexpr float kStepGain = 1.0f;
 constexpr uint32_t kCrossfade = Ms(10);
 constexpr uint32_t kSeekRelease = Ms(15);
 
+// The steady motor, never repeating.  A 0.75 s loop and then an 8.7 s one
+// were both heard repeating by Luboš Krejča, who made the recordings and is a
+// musician (November 2026); any loop is heard once the motor runs long enough,
+// and formatting runs it for over a minute.  So the recording is played in
+// random runs of 5 to 15 whole revolutions (1 to 3 s), each joined to the
+// next at a revolution boundary so the spindle's once-a-revolution rhythm
+// carries on across the seam.  A sketch of exactly this delighted him.
+constexpr std::size_t kMinRun = 5;
+constexpr std::size_t kMaxRun = 15;
+// A run never starts this close to where the last one ended, so the same
+// stretch does not come straight back.
+constexpr std::size_t kNearRun = 3;
+constexpr uint32_t kSeamFade = Ms(50);
+
+// Revolution boundaries of a steady motor recording.  The pattern of one
+// revolution recurs about 200 ms later -- 196 to 199 ms in the Eureka's, and
+// not the same each time, so no fixed period would stay in phase -- and each
+// boundary is put where the last revolution's pattern recurs best, on a 1 ms
+// envelope.  Every seam then sits at the same phase on both sides.
+std::vector<std::size_t> FindTurns(const std::vector<float>& sound) {
+  constexpr std::size_t kBlock = kRate / 1000;
+  constexpr std::size_t kWindow = 199;
+  constexpr std::size_t kMinLag = 195;
+  constexpr std::size_t kMaxLag = 203;
+  std::vector<float> env(sound.size() / kBlock);
+  for (std::size_t i = 0; i < env.size(); ++i) {
+    float sum = 0.0f;
+    for (std::size_t j = 0; j < kBlock; ++j) sum += std::abs(sound[i * kBlock + j]);
+    env[i] = sum;
+  }
+  std::vector<std::size_t> turns{0};
+  while (turns.back() + kMaxLag + kWindow <= env.size()) {
+    const std::size_t at = turns.back();
+    std::size_t best = kMinLag;
+    double bestMatch = -1.0;
+    for (std::size_t lag = kMinLag; lag <= kMaxLag; ++lag) {
+      double match = 0.0;
+      for (std::size_t i = 0; i < kWindow; ++i) match += env[at + i] * env[at + lag + i];
+      if (match > bestMatch) {
+        bestMatch = match;
+        best = lag;
+      }
+    }
+    turns.push_back(at + best);
+  }
+  for (std::size_t& turn : turns) turn *= kBlock;
+  // A seam lets the run it leaves play on for the crossfade.
+  while (!turns.empty() && turns.back() + kSeamFade > sound.size()) turns.pop_back();
+  // Too short to choose from: the loop just loops.
+  if (turns.size() < kMaxRun + kNearRun + 2) turns.clear();
+  return turns;
+}
+
 }  // namespace
 
-DriveSound::DriveSound() : seed_(0x2545f491u) {
+DriveSound::DriveSound() : seed_(0x2545f491u), shuffleSeed_(0x9e3779b9u) {
   // One step of the head: a few damped resonances of the carriage and the
   // frame, struck by a short burst of noise.  Rendered once; every step plays
   // it back at a slightly different strength.
@@ -300,14 +353,36 @@ void DriveSound::StartStep(const Job& job) {
 void DriveSound::SwitchMotor(Motor to) {
   motorOut_ = motorVoice_;
   motorFade_ = motor_ == Motor::kOff ? 0 : kCrossfade;
+  motorFadeLength_ = kCrossfade;
   motor_ = to;
   motorVoice_ = Voice{};
   switch (to) {
     case Motor::kStart: motorVoice_.sound = &motorStart_; break;
-    case Motor::kLoop: motorVoice_.sound = &motorLoop_; motorVoice_.loop = true; break;
+    case Motor::kLoop: StartRun(0); break;
     case Motor::kStop: motorVoice_.sound = &motorStop_; break;
     case Motor::kOff: break;
   }
+}
+
+// Its own xorshift32, apart from Noise(): the synthesized sound stays the
+// same whatever the shuffle draws, and the same events still give the same
+// WAV.
+uint32_t DriveSound::Shuffle() {
+  shuffleSeed_ ^= shuffleSeed_ << 13;
+  shuffleSeed_ ^= shuffleSeed_ >> 17;
+  shuffleSeed_ ^= shuffleSeed_ << 5;
+  return shuffleSeed_;
+}
+
+void DriveSound::StartRun(std::size_t turn) {
+  if (turns_.empty()) {
+    motorVoice_ = Voice{&motorLoop_, 0, SIZE_MAX, 0, true};
+    return;
+  }
+  const std::size_t last = turns_.size() - 1;
+  const std::size_t run = std::min(kMinRun + Shuffle() % (kMaxRun - kMinRun + 1), last - turn);
+  motorVoice_ = Voice{&motorLoop_, turns_[turn]};
+  runEnd_ = turn + run;
 }
 
 // One voice one sample further.  False once it has nothing more to give.
@@ -325,25 +400,44 @@ static bool Advance(const std::vector<float>* sound, std::size_t& position, bool
 float DriveSound::RenderSampled() {
   float out = 0.0f;
 
-  // The motor: spin-up runs straight into the loop, as it does in the
-  // recording, and the loop into the run-down; a change anywhere else is
-  // crossfaded so the cut cannot click.
+  // The motor: spin-up runs straight into the steady motor, which starts
+  // where the spin-up's recording left off; anything else is crossfaded so
+  // the cut cannot click.  The crossfade keeps the power, not the amplitude:
+  // two stretches of motor are not in phase sample by sample, and a linear
+  // one would dip in the middle of every seam.
+  const auto fadeIn = [this] {
+    const double t = 1.0 - static_cast<double>(motorFade_) / motorFadeLength_;
+    return static_cast<float>(std::sin(t * kPi / 2));
+  };
   float value = 0.0f;
+  if (motor_ == Motor::kLoop && !turns_.empty() && motorFade_ == 0 &&
+      motorVoice_.position >= turns_[runEnd_]) {
+    // The run is over: the next starts anywhere but close to where this one
+    // ended, and this one plays on under the crossfade.
+    motorOut_ = motorVoice_;
+    motorFade_ = motorFadeLength_ = kSeamFade;
+    const std::size_t ended = runEnd_;
+    const std::size_t last = turns_.size() - 1;
+    std::size_t next = Shuffle() % (last - kMinRun + 1);
+    for (std::size_t tries = 0; tries <= last && next + kNearRun >= ended && next <= ended + kNearRun;
+         ++tries)
+      next = (next + 1) % (last - kMinRun + 1);
+    StartRun(next);
+  }
   if (motor_ != Motor::kOff) {
     if (Advance(motorVoice_.sound, motorVoice_.position, motorVoice_.loop, value)) {
-      float gain = 1.0f;
-      if (motorFade_ > 0) gain = 1.0f - static_cast<float>(motorFade_) / kCrossfade;
-      out += gain * value;
+      out += (motorFade_ > 0 ? fadeIn() : 1.0f) * value;
     } else if (motor_ == Motor::kStart) {
       motor_ = Motor::kLoop;
-      motorVoice_ = Voice{&motorLoop_, 0, SIZE_MAX, 0, true};
+      StartRun(0);
     } else {
       motor_ = Motor::kOff;
     }
   }
   if (motorFade_ > 0) {
+    const double t = 1.0 - static_cast<double>(motorFade_) / motorFadeLength_;
     if (Advance(motorOut_.sound, motorOut_.position, motorOut_.loop, value))
-      out += static_cast<float>(motorFade_) / kCrossfade * value;
+      out += static_cast<float>(std::cos(t * kPi / 2)) * value;
     --motorFade_;
   }
 
@@ -442,6 +536,7 @@ bool DriveSound::LoadSamples(const Fetch& fetch, std::string& error) {
   }
   motorStart_ = std::move(start);
   motorLoop_ = std::move(loop);
+  turns_ = FindTurns(motorLoop_);
   motorStop_ = std::move(stop);
   seek_ = std::move(seek);
   steps_ = std::move(steps);

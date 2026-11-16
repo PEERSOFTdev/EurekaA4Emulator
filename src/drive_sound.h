@@ -32,10 +32,12 @@ class DriveSound {
 
   // Recorded sounds in place of the synthesized ones, from a folder of 48 kHz
   // mono 16-bit WAVs: motor-rozbeh, motor-slucka and motor-dobeh (spin-up,
-  // loop, run-down), krok-1, krok-2 and on (takes of one head step, played in
-  // turn) and presun (the head raking across many cylinders).  Recordings
+  // steady motor, stop), krok-1, krok-2 and on (takes of one head step, played
+  // in turn) and presun (the head raking across many cylinders).  Recordings
   // because the synthesis never satisfied the owner (HANDOFF 6.54); the
   // built-in set is Luboš Krejča's recordings of a real Eureka A4 drive.
+  // A steady motor long enough is not looped but played in random runs of
+  // whole revolutions (see FindTurns in the .cpp); a short one loops.
   // False with a reason if anything is missing; the synthesized sound then
   // stays.
   // The reason is meant for the user and is UTF-8.
@@ -102,6 +104,11 @@ class DriveSound {
   float Render();
   float RenderSampled();
   void SwitchMotor(Motor to);
+  // The steady motor from revolution `turn` on, for a run of a random number
+  // of revolutions -- or the whole loop over and over when it is too short to
+  // be shuffled.
+  void StartRun(std::size_t turn);
+  uint32_t Shuffle();
 
   std::deque<Job> jobs_;
   uint64_t queued_ = 0;  // samples of work in jobs_, to bound the backlog
@@ -138,6 +145,12 @@ class DriveSound {
   Motor motor_ = Motor::kOff;
   Voice motorVoice_, motorOut_;
   std::size_t motorFade_ = 0;
+  std::size_t motorFadeLength_ = 1;
+  // Revolution boundaries in motorLoop_, as sample indices, up to the last
+  // one a seam can still be crossfaded from; empty when the loop just loops.
+  std::vector<std::size_t> turns_;
+  std::size_t runEnd_ = 0;      // turn index where the current run ends
+  uint32_t shuffleSeed_;
   bool motorWasOn_ = false;
   std::vector<Voice> heads_;
 };

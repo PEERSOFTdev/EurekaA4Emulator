@@ -71,6 +71,22 @@ std::vector<uint8_t> Wav(double seconds, int16_t level, uint32_t rate = kRate) {
   return out;
 }
 
+// A steady motor of `turns` revolutions of kTurn samples each: a 1 ms pulse at
+// the start of every revolution, for its rhythm, then a level of its own,
+// 1000 + 100 per revolution, so the mixer's output says which one is playing.
+constexpr std::size_t kTurn = 9504;  // 198 ms, a whole number of 1 ms blocks
+constexpr int16_t kPulse = 16000;
+
+std::vector<uint8_t> Revolutions(std::size_t turns) {
+  std::vector<uint8_t> out = Wav(static_cast<double>(turns * kTurn) / kRate, 0);
+  for (std::size_t i = 0; i < turns * kTurn; ++i) {
+    const int16_t level =
+        i % kTurn < kRate / 1000 ? kPulse : static_cast<int16_t>(1000 + 100 * (i / kTurn));
+    std::memcpy(&out[44 + 2 * i], &level, 2);
+  }
+  return out;
+}
+
 // The test set; `rate` lets one file be broken on purpose.
 DriveSound::Fetch TestSet(uint32_t loopRate = kRate, bool withStep = true) {
   return [=](const std::string& stem, std::vector<uint8_t>& bytes) {
@@ -207,6 +223,60 @@ void RakesAcrossCylinders() {
   Check(Near(out[At(1.5)], loop), "po 40 krokoch dozvoni", Show(out[At(1.5)], loop));
 }
 
+// A long enough steady motor is never looped (HANDOFF 6.54): it plays in
+// random runs of 5 to 15 whole revolutions, and every seam sits on a
+// revolution boundary.  A loop of any length was heard repeating, and a seam
+// off the boundary would break the spindle's rhythm -- neither is anything a
+// level check would see, so both are read off the pulses and levels here.
+void ShufflesTheMotor() {
+  const auto set = [](const std::string& stem, std::vector<uint8_t>& bytes) {
+    if (stem == "motor-rozbeh") bytes = Wav(0.1, 8000);
+    else if (stem == "motor-slucka") bytes = Revolutions(30);
+    else if (stem == "motor-dobeh") bytes = Wav(0.1, 12000);
+    else if (stem == "presun") bytes = Wav(0.5, 0);
+    else if (stem == "krok-1") bytes = Wav(0.05, 0);  // silent, not to blur the levels
+    else return false;
+    return true;
+  };
+  std::vector<EurekaMachine::DriveEvent> events;
+  // A step back and forth every second keeps the motor running throughout.
+  for (int i = 0; i < 30; ++i)
+    events.push_back(Seek(static_cast<uint8_t>(i % 2), static_cast<uint8_t>((i + 1) % 2), i));
+  std::string error;
+  DriveSound drive;
+  drive.LoadSamples(set, error);
+  const auto out = Run(drive, events, 30.0);
+
+  const int threshold = kPulse / 8;  // the set's gain of a quarter, and half that
+  std::vector<std::size_t> pulses;
+  for (std::size_t i = At(0.5); i < At(29.0); ++i)
+    if (out[i] >= threshold && out[i - 1] < threshold) pulses.push_back(i);
+  bool even = pulses.size() > 100;
+  for (std::size_t i = 1; i < pulses.size(); ++i)
+    even = even && pulses[i] - pulses[i - 1] + 2 >= kTurn && pulses[i] - pulses[i - 1] <= kTurn + 2;
+  Check(even, "rytmus otacok drzi aj cez svy", std::to_string(pulses.size()) + " pulzov");
+
+  // Which revolution each one was, from its level half a revolution in --
+  // past the crossfade -- and the runs of revolutions that follow on.
+  std::vector<int> played;
+  for (std::size_t p : pulses)
+    played.push_back(static_cast<int>(std::lround((out[p + kTurn / 2] * 4.0 - 1000) / 100)));
+  std::vector<int> runs{1};
+  for (std::size_t i = 1; i < played.size(); ++i) {
+    if (played[i] == played[i - 1] + 1) ++runs.back();
+    else runs.push_back(1);
+  }
+  bool lengths = runs.size() > 10;
+  for (std::size_t i = 1; i + 1 < runs.size(); ++i) lengths = lengths && runs[i] >= 5 && runs[i] <= 15;
+  std::string shown;
+  for (int r : runs) shown += std::to_string(r) + " ";
+  Check(lengths, "motor sa neopakuje, hra behy 5 az 15 otacok", shown);
+
+  DriveSound again;
+  again.LoadSamples(set, error);
+  Check(Run(again, events, 30.0) == out, "nahodne behy su pri rovnakych udalostiach rovnake");
+}
+
 // Switched off, the machine gives no samples; Continue has to let the drive
 // finish on its own, or the motor would hum on into the next power-up.
 void FinishesWithoutTheMachine() {
@@ -241,6 +311,7 @@ int main() {
   WaitsForTheDac();
   PlaysInRealTime();
   RakesAcrossCylinders();
+  ShufflesTheMotor();
   FinishesWithoutTheMachine();
   SameEventsSameSound();
   std::cout << (failures == 0 ? "PASS" : "FAIL") << " mode=DRIVE kontrol=" << checks

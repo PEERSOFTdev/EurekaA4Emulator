@@ -386,9 +386,11 @@ chvíli, keď stroj najbližšie čaká na kláves, teda nikdy uprostred čítan
 alebo zápisu.
 
 Zvuky sú nahrávky skutočnej mechaniky Eureky A4, ktoré nahral Luboš
-Krejča. Vstavané zvuky sú v balíku emulátora aj ako súbory, v
-priečinku **`zvuky-mechaniky`**, spolu s návodom `NAVOD.md` (čo ktorý
-zvuk robí, aký musí mať formát a hlasitosť) a s pôvodom a licenciou
+Krejča. Motor sa pritom neopakuje ani pri minútovom formátovaní: emulátor
+skladá jeho vrčanie z náhodných úsekov nahrávky. Vstavané zvuky sú
+v balíku emulátora aj ako súbory, v priečinku **`zvuky-mechaniky`**, spolu
+s návodom `NAVOD.md` (čo ktorý zvuk robí, aký musí mať formát a hlasitosť
+a ako ho nahrať) a s pôvodom a licenciou
 v `PUVOD.md`. Ak máte vlastné nahrávky, nahraďte nimi súbory v tom
 priečinku a celý ho dajte vedľa súboru s nastaveniami (viď [Čo si emulátor
 pamätá](#čo-si-emulátor-pamätá)); emulátor ich pri ďalšom štarte použije

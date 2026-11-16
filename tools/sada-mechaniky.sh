@@ -19,31 +19,30 @@ if [ -z "$S" ] || [ -z "$O" ]; then
 fi
 mkdir -p "$O"
 OUT=(-ac 1 -ar 48000 -c:a pcm_s16le -bitexact -fflags +bitexact -map_metadata -1 -y -loglevel error)
-D="$S/Diskove funkce.wav"
+# The motor on its own for a long while: a 1.44 MB PC diskette in the
+# Eureka, which spins it trying to read it (25. 10. 2026).  It was made at
+# the same level as the others -- its first second is as loud as the motor
+# in "Diskove funkce" -- so the one gain fits all.
+M="$S/jednotka jiná verze.wav"
 
-# Spin-up: from the start of the recording to where the loop begins.  The
-# motor's pitch (about 200 Hz) does not rise in it; the drive is up to speed
-# almost at once.
-ffmpeg -i "$D" -af "atrim=0:0.30,asetpts=PTS-STARTPTS,afade=t=in:d=0.02,volume=$G" \
+# Spin-up: from the switch-on to 3.5 s.  The motor is up to speed at once
+# but some 7 dB louder at first and settles over about three seconds; its
+# pitch stays.  The steady motor starts exactly where this ends.
+ffmpeg -i "$M" -af "atrim=0:3.5,asetpts=PTS-STARTPTS,afade=t=in:d=0.02,volume=$G" \
   "${OUT[@]}" "$O/motor-rozbeh.wav"
 
-# Loop: 0.30-1.05 s of the steady motor before the step, its last 0.1 s
-# crossfaded with 0.20-0.30 s, so its end runs into its start and the
-# spin-up, which ends at 0.30 s, runs straight into it.
-ffmpeg -i "$D" -filter_complex "\
-[0]asplit=3[a][b][c];\
-[a]atrim=0.30:0.95,asetpts=PTS-STARTPTS[body];\
-[b]atrim=0.95:1.05,asetpts=PTS-STARTPTS,afade=t=out:d=0.1[tail];\
-[c]atrim=0.20:0.30,asetpts=PTS-STARTPTS,afade=t=in:d=0.1[head];\
-[tail][head]amix=inputs=2:normalize=0[seam];\
-[body][seam]concat=n=2:v=0:a=1,volume=$G" "${OUT[@]}" "$O/motor-slucka.wav"
+# The steady motor, 3.5-12.2 s.  Not a loop: the emulator plays it in random
+# runs of whole revolutions (drive_sound.cpp), so its ends need no seam.
+ffmpeg -i "$M" -af "atrim=3.5:12.2,asetpts=PTS-STARTPTS,volume=$G" \
+  "${OUT[@]}" "$O/motor-slucka.wav"
 
-# Run-down: from where the motor starts to fade to the end of the recording,
-# which stops before the motor does -- hence the fade at the end.
-ffmpeg -i "$D" -af "atrim=2.00:4.85,asetpts=PTS-STARTPTS,afade=t=out:st=2.25:d=0.6,volume=$G" \
+# The stop: the motor switched off at 12.7 s -- a drop to a third within
+# 50 ms, a faint click and a quiet coast; the other long recording ends the
+# same way.  The recording ends during the coast, hence the short fade.
+ffmpeg -i "$M" -af "atrim=12.45,asetpts=PTS-STARTPTS,areverse,afade=t=in:d=0.03,areverse,volume=$G" \
   "${OUT[@]}" "$O/motor-dobeh.wav"
 
-# The step: Pohyb7 (pohyb8 is the same take).  The step in Diskove funkce
+# The step: Pohyb7 (pohyb8 is the same take).  The step in "Diskove funkce"
 # is two strikes 50 ms apart -- the first move after the spin-up, not an
 # ordinary step -- and played in turn with this one it made every other step
 # of a format sound doubled, so it is left out.

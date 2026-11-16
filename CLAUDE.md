@@ -523,7 +523,11 @@ mechanika bez čakania na DAC, motor, ktorý nezastane, a prázdne `Continue`
 zhodia každé svoje kontroly. Zapnutie a vypnutie zvuku žije vo vlákne
 emulátora a toto ho nedrží. Drží aj **hlasitosť jedného kroku** voči slučke
 (`kStepGain` = 1 od nahrávok skutočnej Eureky, 24. 10. 2026; predtým 0,3,
-HANDOFF 6.54) cez `kLoopAndStep`. Drží aj **skutočný čas** (`SetRealTime`, verná mechanika,
+HANDOFF 6.54) cez `kLoopAndStep`. Drží aj **motor, ktorý sa neopakuje**
+(`ShufflesTheMotor`, od 16. 11. 2026): dlhý ustálený motor sa hrá po
+náhodných behoch 5 až 15 celých otáčok, nie dookola, a každý šov sedí na
+hranici otáčky — na umelej slučke s pulzom a vlastnou úrovňou v každej
+otáčke. Overené mutáciou: obyčajná slučka a šov pol otáčky vedľa. Drží aj **skutočný čas** (`SetRealTime`, verná mechanika,
 `PlaysInRealTime`): mechanika mlčí do prvej udalosti, krok zaznie hneď —
 bez vlastného roztáčania a aj pod rečou, lebo to už odčakal radič a firmvér
 — a motor zastane 1,8 s po poslednej udalosti. Overené mutáciou: čakanie na
